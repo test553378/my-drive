@@ -7,6 +7,7 @@ import {
   getTrack,
   trackPose,
   cameraPose,
+  overviewCamera,
   mapPath,
   mapPoint,
 } from "./tracks.js";
@@ -665,6 +666,10 @@ void main(){
         "aria-pressed",
         String(button.dataset.course === S.courseId),
       );
+    document.querySelector(".preview-hint").textContent =
+      garageTab === "course"
+        ? "↔ ゆびで コースを まわしてみよう"
+        : "↔ ゆびで くるまを まわしてみよう";
     vehicleMeshes(S);
     if (garageTab === "course") ensureScene();
   }
@@ -1205,19 +1210,12 @@ void main(){
     if (garageTab === "course") {
       ensureScene();
       const t = getTrack(S.courseId),
-        b = t.bounds,
-        cx = (b.minX + b.maxX) / 2,
-        cz = (b.minZ + b.maxZ) / 2,
-        r = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) * 0.95;
-      const eye = [
-          cx + Math.sin(garageYaw + 0.6) * r,
-          (b.maxY + b.minY) / 2 + r * 0.95,
-          cz + Math.cos(garageYaw + 0.6) * r,
-        ],
-        view = mul(
-          perspective((40 * Math.PI) / 180, vw / vh, 1, 3000),
-          lookAt(eye, [cx, (b.maxY + b.minY) / 2, cz]),
-        );
+        camera = overviewCamera(t, vw / vh, garageYaw),
+        eye = camera.eye;
+      const view = mul(
+        perspective((40 * Math.PI) / 180, vw / vh, 1, camera.far),
+        lookAt(eye, camera.aim),
+      );
       gl.uniformMatrix4fv(loc.vp, false, view);
       gl.uniform3fv(loc.eye, eye);
       drawScene(trackPose(t, 0), true);

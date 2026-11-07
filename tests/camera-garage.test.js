@@ -1,4 +1,4 @@
-import { TRACKS, trackPose, cameraPose } from "../tracks.js";
+import { TRACKS, trackPose, cameraPose, overviewCamera } from "../tracks.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { perspective, lookAt, mul, projectPoint } from "../camera.js";
@@ -91,4 +91,25 @@ test("all 24 vehicle and part combinations have identical assisted handling", ()
           assert.equal(s.v, baseline.v);
           assert.equal(s.offset, baseline.offset);
         }
+});
+
+test("every course and its road edges fit the overview at tablet preview aspect ratios", () => {
+  for (const track of TRACKS)
+    for (const aspect of [0.55, 1, 2.5])
+      for (const yaw of [0, 1, 2, 3, 4, 5]) {
+        const c = overviewCamera(track, aspect, yaw),
+          vp = mul(
+            perspective((40 * Math.PI) / 180, aspect, 1, c.far),
+            lookAt(c.eye, c.aim),
+          );
+        for (let d = 0; d < track.length; d += 10)
+          for (const side of [-1, 1]) {
+            const p = trackPose(track, d, side * (track.halfWidth + 4)),
+              q = projectPoint(vp, [p.x, p.y, p.z]);
+            assert.ok(
+              Math.abs(q[0]) < 0.95 && Math.abs(q[1]) < 0.95 && q[2] < 1,
+              `${track.id} preview clips road`,
+            );
+          }
+      }
 });

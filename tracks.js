@@ -255,3 +255,27 @@ export function cameraPose(
     ],
   };
 }
+
+// Fit a bounding sphere in the narrower field of view, including road edges.
+export function overviewCamera(track, aspect, yaw = 0) {
+  const b = track.bounds,
+    aim = [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, (b.minZ + b.maxZ) / 2];
+  const radius =
+    Math.hypot(b.maxX - b.minX, b.maxY - b.minY, b.maxZ - b.minZ) / 2 +
+    track.halfWidth +
+    12;
+  const halfFov = Math.atan(
+    Math.tan((20 * Math.PI) / 180) * Math.min(1, aspect),
+  );
+  const distance = (radius / Math.sin(halfFov)) * 1.1,
+    r = distance / Math.hypot(1, 0.95);
+  return {
+    eye: [
+      aim[0] + Math.sin(yaw + 0.6) * r,
+      aim[1] + r * 0.95,
+      aim[2] + Math.cos(yaw + 0.6) * r,
+    ],
+    aim,
+    far: distance + radius * 2 + 50,
+  };
+}
