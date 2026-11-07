@@ -1,12 +1,11 @@
 {
-  "name": "ぼくのドライブ - 3さいからのくるまゲーム",
-  "short_name": "ぼくのドライブ",
-  "description": "3歳から遊べる広告なしの車の運転ゲーム",
+  "name": "ぼくの SUPER RACE",
+  "short_name": "SUPER RACE",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "landscape",
-  "background_color": "#8edcf4",
-  "theme_color": "#8edcf4",
+  "background_color": "#152944",
+  "theme_color": "#152944",
   "icons": [{"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
 }
