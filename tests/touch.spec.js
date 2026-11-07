@@ -13,6 +13,13 @@ test("game gestures suppress double-tap without disabling ordinary selection or 
     .getAttribute("content");
   expect(viewport).not.toMatch(/maximum-scale|user-scalable/);
   await expect(page.locator("#right")).toHaveCSS("touch-action", "none");
+  for (const selector of ["html", "body", ".modal", ".garage-options"]) {
+    const action = await page
+      .locator(selector)
+      .first()
+      .evaluate((el) => getComputedStyle(el).touchAction);
+    expect(action).toMatch(/manipulation|pinch-zoom/);
+  }
   for (let i = 0; i < 3; i++) await page.locator('[data-model="1"]').tap();
   await expect(page.locator('[data-model="1"]')).toHaveAttribute(
     "aria-pressed",

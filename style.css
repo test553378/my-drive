@@ -21,7 +21,7 @@ body {
     "Hiragino Kaku Gothic ProN",
     "Yu Gothic",
     sans-serif;
-  touch-action: none;
+  touch-action: manipulation;
   overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
@@ -790,7 +790,7 @@ body {
   justify-content: center;
   background: #08111ce8;
   padding: 12px;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 .diagnostics.hidden {
   display: none;
@@ -802,7 +802,7 @@ body {
   align-items: stretch;
   max-height: 95vh;
   overflow: auto;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 .diagnostics h2,
 .diagnostics p {
@@ -825,7 +825,7 @@ body {
   padding: 10px;
   user-select: text;
   -webkit-user-select: text;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 .diagnostic-actions {
   display: flex;
@@ -863,7 +863,7 @@ body {
 }
 .modal,
 .panel {
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   overscroll-behavior: contain;
 }
 .models {
@@ -1018,7 +1018,7 @@ body {
   overflow-y: auto;
   min-height: 0;
   pointer-events: auto;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   border-left: 1px solid #ffffff1c;
 }
 .garage-options fieldset {
