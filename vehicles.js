@@ -81,6 +81,10 @@ function ring(m, x, r0, r1, color, mat, N = 32) {
   }
 }
 export function buildBody(Mesh, paint, model, wide, detailed = true) {
+  if (model >= 2 && model !== 5)
+    return buildUtilityBody(Mesh, paint, model, wide);
+  const originalModel = model;
+  if (model === 5) model = 1;
   const m = new Mesh(),
     spec = VEHICLES[model],
     width = wide ? 1.14 : 1.04;
@@ -235,6 +239,163 @@ export function buildBody(Mesh, paint, model, wide, detailed = true) {
   if (model === 0)
     for (let i = 0; i < 7; i++)
       m.box(-0.42 + i * 0.14, 0.79, -1.85, 0.045, 0.018, 0.3, C(20, 28, 34), 8);
+  if (originalModel === 5) {
+    m.box(0, 0.74, 0, 2.04, 0.21, 2.5, C(235, 239, 241), 2);
+    m.box(0, 1.43, -0.1, 1.12, 0.1, 0.33, C(33, 40, 48), 8);
+  }
+  return m.done();
+}
+function buildUtilityBody(Mesh, paint, model, wide) {
+  const s = VEHICLES[model],
+    m = new Mesh(),
+    w = s.width + (wide ? 0.18 : 0),
+    l = s.length,
+    black = C(20, 28, 36),
+    glass = C(23, 42, 55),
+    white = C(232, 237, 239);
+  if (s.kind === "bike") {
+    beam(m, [0, 0.4, -0.8], [0, 0.72, 0.35], 0.075, C(86, 99, 111), 6);
+    beam(m, [0, 0.72, 0.35], [0, 0.43, 0.83], 0.045, C(137, 151, 163), 6);
+    m.sphere(0, 0.82, 0.12, 0.26, 0.22, 0.44, paint, 2, 16, 8);
+    m.box(0, 0.85, -0.42, 0.45, 0.1, 0.62, black, 7);
+    beam(m, [-0.34, 1.05, 0.6], [0.34, 1.05, 0.6], 0.03, C(110, 122, 132), 6);
+    m.box(0, 0.68, 1.01, 0.3, 0.22, 0.06, white, 4);
+    m.box(0, 0.72, -1.0, 0.23, 0.09, 0.07, C(225, 28, 24), 4);
+    // Helmeted rider: limbs and torso stay with the leaning bike, no ragdoll.
+    m.sphere(0, 1.14, -0.18, 0.22, 0.32, 0.23, C(41, 52, 69), 7, 12, 6);
+    m.sphere(0, 1.55, 0.05, 0.22, 0.24, 0.23, paint, 2, 16, 8);
+    m.box(0, 1.58, 0.24, 0.34, 0.1, 0.04, C(20, 33, 44), 3);
+    for (const side of [-1, 1]) {
+      beam(
+        m,
+        [side * 0.17, 1.2, -0.08],
+        [side * 0.33, 1.05, 0.57],
+        0.055,
+        black,
+        7,
+      );
+      beam(
+        m,
+        [side * 0.18, 0.92, -0.4],
+        [side * 0.28, 0.43, -0.04],
+        0.075,
+        black,
+        7,
+      );
+    }
+    return m.done();
+  }
+  m.box(0, 0.44, 0, w * 0.94, 0.25, l * 0.95, black, 8);
+  if (s.kind === "bus") {
+    m.box(0, 1.72, 0, w, 2.45, l, paint, 2);
+    m.box(0, 2.89, 0, w * 0.98, 0.13, l * 0.98, white, 2);
+    m.box(0, 2.09, l / 2 + 0.012, w * 0.88, 1.09, 0.03, glass, 3);
+    m.box(0, 2.17, -l / 2 - 0.012, w * 0.85, 0.88, 0.03, glass, 3);
+    for (const side of [-1, 1])
+      for (let z = -l / 2 + 0.6; z < l / 2 - 0.4; z += 0.88)
+        m.box(side * (w / 2 + 0.013), 2.22, z, 0.03, 0.92, 0.73, glass, 3);
+    for (const side of [-1, 1])
+      m.box(side * (w / 2 + 0.02), 1.25, 0, 0.035, 0.16, l * 0.97, white, 2);
+  } else if (s.kind === "truck") {
+    m.box(0, 1.6, l * 0.3, w, 2.0, l * 0.35, paint, 2);
+    m.box(0, 2.03, l * 0.478, w * 0.86, 0.73, 0.035, glass, 3);
+    m.box(0, 1.7, -l * 0.17, w * 1.02, 2.25, l * 0.58, C(204, 215, 220), 6);
+    for (let z = -l * 0.43; z < l * 0.1; z += 0.3)
+      for (const side of [-1, 1])
+        m.box(side * w * 0.515, 1.7, z, 0.025, 2.0, 0.025, C(153, 167, 180), 6);
+  } else {
+    const main = s.kind === "ambulance" ? white : paint;
+    m.box(0, 1.62, -0.37, w, 2.0, l * 0.76, main, 2);
+    m.box(0, 1.21, l * 0.35, w * 0.96, 1.5, l * 0.3, main, 2);
+    m.box(0, 1.69, l * 0.505, w * 0.82, 0.64, 0.025, glass, 3);
+    for (const side of [-1, 1]) {
+      m.box(side * w * 0.49, 1.76, l * 0.31, 0.03, 0.66, 0.96, glass, 3);
+      m.box(
+        side * w * 0.505,
+        1.28,
+        0,
+        0.03,
+        0.22,
+        l * 0.94,
+        s.kind === "ambulance" ? paint : C(232, 234, 218),
+        2,
+      );
+      for (let z = -l * 0.37; z < l * 0.16; z += 0.7)
+        m.box(
+          side * w * 0.505,
+          0.91,
+          z,
+          0.035,
+          0.65,
+          0.58,
+          C(135, 150, 161),
+          6,
+        );
+    }
+    if (s.kind === "ambulance")
+      for (const side of [-1, 1]) {
+        m.box(
+          side * w * 0.508,
+          2.03,
+          -0.62,
+          0.04,
+          0.58,
+          0.16,
+          C(49, 145, 107),
+          4,
+        );
+        m.box(
+          side * w * 0.51,
+          2.03,
+          -0.62,
+          0.045,
+          0.16,
+          0.58,
+          C(49, 145, 107),
+          4,
+        );
+      }
+    if (s.kind === "fire") {
+      for (const side of [-1, 1])
+        m.box(
+          side * 0.46,
+          2.72,
+          -0.12,
+          0.09,
+          0.12,
+          l * 0.86,
+          C(153, 170, 185),
+          6,
+        );
+      for (let z = -l * 0.4; z < l * 0.38; z += 0.35)
+        m.box(0, 2.72, z, 0.95, 0.07, 0.07, C(190, 202, 213), 6);
+    }
+    m.box(0, s.roof + 0.025, 0.35, w * 0.67, 0.12, 0.34, black, 8);
+  }
+  for (const side of [-1, 1]) {
+    m.box(
+      side * w * 0.34,
+      0.74,
+      l / 2 + 0.025,
+      0.34,
+      0.12,
+      0.035,
+      C(225, 239, 242),
+      4,
+    );
+    m.box(
+      side * w * 0.34,
+      0.74,
+      -l / 2 - 0.025,
+      0.3,
+      0.12,
+      0.035,
+      C(227, 28, 30),
+      4,
+    );
+    m.box(side * (w * 0.57), 1.93, l * 0.38, 0.16, 0.3, 0.2, black, 8);
+  }
+  m.box(0, 0.52, l / 2 + 0.03, w * 1.02, 0.2, 0.19, C(109, 124, 138), 6);
   return m.done();
 }
 export function buildWheel(Mesh, type, detailed = true) {
@@ -311,6 +472,46 @@ export function buildWheel(Mesh, type, detailed = true) {
 }
 export function buildAero(Mesh, model, body, type) {
   if (type === 0) return null;
+  if (model >= 2 && model !== 5) {
+    const m = new Mesh(),
+      s = VEHICLES[model],
+      carbon = C(26, 34, 43);
+    if (s.kind === "bike")
+      m.box(
+        0,
+        type === 1 ? 0.98 : 1.1,
+        0.72,
+        0.42,
+        type === 1 ? 0.18 : 0.35,
+        0.09,
+        C(35, 56, 72),
+        3,
+      );
+    else {
+      m.box(
+        0,
+        0.34,
+        s.length / 2 + 0.08,
+        s.width * 1.06,
+        0.13,
+        0.28,
+        carbon,
+        8,
+      );
+      if (type === 2)
+        m.box(
+          0,
+          s.roof + 0.11,
+          -s.length * 0.2,
+          s.width * 0.8,
+          0.21,
+          1.1,
+          carbon,
+          8,
+        );
+    }
+    return m.done();
+  }
   const m = new Mesh(),
     width = body ? 1.19 : 1.08,
     carbon = C(27, 33, 40);

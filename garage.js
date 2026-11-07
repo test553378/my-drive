@@ -1,8 +1,6 @@
-// All options are cosmetic. Every combination uses the same assisted handling.
-export const VEHICLES = Object.freeze([
-  { name: "NOVA R", label: "スーパーカー", wheelZ: [-1.47, 1.47], roof: 1.24 },
-  { name: "AERO S", label: "スポーツカー", wheelZ: [-1.42, 1.43], roof: 1.37 },
-]);
+// Parts are cosmetic; vehicle categories have distinct, assisted handling.
+import { VEHICLES } from "./vehicle-config.js";
+export { VEHICLES } from "./vehicle-config.js";
 export const PART_OPTIONS = Object.freeze({
   tyres: ["スポーツ", "スリック"],
   body: ["スタンダード", "ワイド"],
@@ -22,11 +20,16 @@ export function normalizeParts(parts = {}) {
   };
 }
 export function defaultSetup(model = 0) {
-  return { model, color: model === 0 ? 0 : 1, parts: normalizeParts() };
+  return {
+    model,
+    color: [0, 1, 2, 3, 0, 1, 0, 0][model] || 0,
+    parts: normalizeParts(),
+  };
 }
 export function copySetup(setup) {
   return {
-    model: setup.model === 1 ? 1 : 0,
+    model:
+      Number.isInteger(setup.model) && VEHICLES[setup.model] ? setup.model : 0,
     color: Math.max(
       0,
       Math.min(3, Number.isInteger(setup.color) ? setup.color : 0),

@@ -366,7 +366,7 @@ test("the complete versioned app shell is cached under the GitHub Pages subdirec
   await ready(page);
   await cached(page);
   const files = await page.evaluate(async () => {
-    const cache = await caches.open("bokuno-grand-race-v5-20261107a");
+    const cache = await caches.open("bokuno-grand-race-v6-20261107b");
     const keys = await cache.keys();
     return Promise.all(
       keys.map(async (r) => ({
@@ -383,6 +383,17 @@ test("the complete versioned app shell is cached under the GitHub Pages subdirec
       "diagnostics.js",
       "game.js",
       "driving.js",
+      "input.js",
+      "vehicle-config.js",
+      "tracks.js",
+      "world.js",
+      "race-config.js",
+      "collisions.js",
+      "hazards.js",
+      "damage.js",
+      "pedestrians.js",
+      "race-metrics.js",
+      "actors.js",
       "camera.js",
       "garage.js",
       "vehicles.js",

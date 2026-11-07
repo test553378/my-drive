@@ -1,47 +1,40 @@
+import { TRACKS, trackPose, cameraPose } from "../tracks.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { perspective, lookAt, mul, projectPoint } from "../camera.js";
 import { center, laneWorldX, createRace, advance } from "../driving.js";
 import { defaultSetup, copySetup, normalizeParts } from "../garage.js";
 
-test("right and left input project to their corresponding sides of the road through the real camera matrices", () => {
-  for (const z of [0, 350, 700, 1399, 1401, 2100, 2790])
-    for (const direction of [-1, 1]) {
-      const s = createRace();
-      s.phase = "race";
-      s.z = z;
-      s.v = 44;
-      s.steerR = direction === 1;
-      s.steerL = direction === -1;
-      for (let i = 0; i < 30; i++) advance(s, [], 1 / 60);
-      const x = center(s.z),
-        vp = mul(
-          perspective((62 * Math.PI) / 180, 1080 / 810, 0.2, 435),
-          lookAt(
-            [x, 3.45, s.z - 10.5],
-            [center(s.z + 38) * 0.64 + x * 0.36, 1.1, s.z + 34],
-          ),
+test("right and left project correctly on every closed route, including corners and lap seams", () => {
+  for (const t of TRACKS)
+    for (let d = -0.1; d < t.length * 2; d += 113)
+      for (const direction of [-1, 1]) {
+        const p = trackPose(t, d, direction * 2),
+          c = trackPose(t, d),
+          camera = cameraPose(t, d, 0);
+        const vp = mul(
+          perspective((62 * Math.PI) / 180, 1080 / 810, 0.2, 520),
+          lookAt(camera.eye, camera.aim),
         );
-      const player = projectPoint(vp, [laneWorldX(s.z, s.offset), 0.6, s.z]),
-        road = projectPoint(vp, [x, 0.6, s.z]);
-      assert.ok(
-        direction * (player[0] - road[0]) > 0,
-        `z=${z} direction=${direction} must match the screen`,
-      );
-      // Front wheels and the nose must turn in the same screen direction.
-      const yaw = -s.steerV * 0.035,
-        nose = projectPoint(vp, [
-          laneWorldX(s.z, s.offset) + Math.sin(yaw) * 1.47,
-          0.44,
-          s.z + Math.cos(yaw) * 1.47,
+        const player = projectPoint(vp, [p.x, p.y + 0.6, p.z]),
+          road = projectPoint(vp, [c.x, c.y + 0.6, c.z]);
+        assert.ok(
+          direction * (player[0] - road[0]) > 0,
+          `${t.id}/${d}/${direction}`,
+        );
+        const yaw = p.yaw - direction * 0.15;
+        const nose = projectPoint(vp, [
+          p.x + Math.sin(yaw) * 1.47,
+          p.y + 0.44,
+          p.z + Math.cos(yaw) * 1.47,
         ]);
-      const straight = projectPoint(vp, [
-        laneWorldX(s.z, s.offset),
-        0.44,
-        s.z + 1.47,
-      ]);
-      assert.ok(direction * (nose[0] - straight[0]) > 0);
-    }
+        const straight = projectPoint(vp, [
+          p.x + p.tx * 1.47,
+          p.y + 0.44,
+          p.z + p.tz * 1.47,
+        ]);
+        assert.ok(direction * (nose[0] - straight[0]) > 0);
+      }
 });
 
 test("the old +X convention is explicitly caught as a reversed screen direction", () => {
@@ -91,8 +84,11 @@ test("all 24 vehicle and part combinations have identical assisted handling", ()
           const s = createRace(0, model, { tyres, body, aero });
           s.phase = "race";
           for (let i = 0; i < 240; i++) advance(s, [], 1 / 60);
-          assert.equal(s.z, reference.z);
-          assert.equal(s.v, reference.v);
-          assert.equal(s.offset, reference.offset);
+          const baseline = createRace(0, model);
+          baseline.phase = "race";
+          for (let i = 0; i < 240; i++) advance(baseline, [], 1 / 60);
+          assert.equal(s.z, baseline.z);
+          assert.equal(s.v, baseline.v);
+          assert.equal(s.offset, baseline.offset);
         }
 });

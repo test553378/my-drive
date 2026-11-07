@@ -1,13 +1,24 @@
 // A complete, versioned app shell. No remote resources or runtime data are cached.
-const CACHE_NAME = "bokuno-grand-race-v5-20261107a";
+const CACHE_NAME = "bokuno-grand-race-v6-20261107b";
 const FILES = [
   "index.html",
   "style.css",
   "diagnostics.js",
   "game.js",
   "driving.js",
+  "race-config.js",
+  "collisions.js",
+  "hazards.js",
+  "damage.js",
+  "pedestrians.js",
+  "race-metrics.js",
+  "actors.js",
+  "tracks.js",
+  "world.js",
+  "input.js",
   "camera.js",
   "garage.js",
+  "vehicle-config.js",
   "vehicles.js",
   "manifest.webmanifest",
   "icon.svg",
