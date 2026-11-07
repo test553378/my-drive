@@ -103,6 +103,27 @@ test("the original uniform precision mismatch fails to link and explicit matchin
   expect(result.fixed.ok).toBe(true);
 });
 
+test("the optional fragment mediump fallback still compiles and renders", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const source = WebGLRenderingContext.prototype.shaderSource;
+    WebGLRenderingContext.prototype.shaderSource = function (shader, code) {
+      const fallback = code.replace(
+        /#ifdef GL_FRAGMENT_PRECISION_HIGH\s+precision highp float;\s+#else\s+precision mediump float;\s+#endif/,
+        "precision mediump float;",
+      );
+      if (fallback !== code) window.__forcedMediump = true;
+      return source.call(this, shader, fallback);
+    };
+  });
+  await ready(page);
+  expect(await page.evaluate(() => window.__forcedMediump)).toBe(true);
+  expect(
+    (await read(page)).events.some((e) => e.stage === "running"),
+  ).toBeTruthy();
+});
+
 test("both original vehicle shapes and all paint choices render and survive race start", async ({
   page,
 }) => {
@@ -142,6 +163,8 @@ test("large controls steer, release on cancellation, recentre and allow turbo", 
   await expect
     .poll(async () => (await read(page)).runtime.offset)
     .toBeGreaterThan(2);
+  let projected = (await read(page)).runtime.screen;
+  expect(projected.player[0]).toBeGreaterThan(projected.laneCenter[0]);
   await right.dispatchEvent("pointercancel", {
     pointerId: 11,
     pointerType: "touch",
@@ -150,6 +173,17 @@ test("large controls steer, release on cancellation, recentre and allow turbo", 
   await expect
     .poll(async () => (await read(page)).runtime.offset)
     .toBeLessThan(1);
+  await page
+    .locator("#left")
+    .dispatchEvent("pointerdown", { pointerId: 13, pointerType: "touch" });
+  await expect
+    .poll(async () => (await read(page)).runtime.offset)
+    .toBeLessThan(-2);
+  projected = (await read(page)).runtime.screen;
+  expect(projected.player[0]).toBeLessThan(projected.laneCenter[0]);
+  await page
+    .locator("#left")
+    .dispatchEvent("pointerup", { pointerId: 13, pointerType: "touch" });
   await page.locator("#boost").dispatchEvent("pointerdown", { pointerId: 12 });
   await expect(page.locator("#boost")).toBeDisabled();
   await expect(page.locator("#toast")).toContainText("ターボ");
@@ -275,7 +309,12 @@ for (const stage of ["compile", "link"])
 test("context loss stops racing; restoration rebuilds resources and requires explicit resume", async ({
   page,
 }) => {
-  await start(page);
+  await ready(page);
+  await page.locator('[data-part="tyres"][data-value="1"]').click();
+  await page.locator('[data-part="body"][data-value="1"]').click();
+  await page.locator('[data-part="aero"][data-value="2"]').click();
+  await page.locator("#start").click();
+  await expect.poll(async () => (await read(page)).runtime.phase).toBe("race");
   const supported = await page.evaluate(() => {
     const gl = document.querySelector("canvas").getContext("webgl");
     window.__lose = gl.getExtension("WEBGL_lose_context");
@@ -299,6 +338,11 @@ test("context loss stops racing; restoration rebuilds resources and requires exp
     .poll(async () => (await read(page)).runtime.frames)
     .toBeGreaterThan(lost.runtime.frames + 2);
   expect((await read(page)).runtime.phase).toBe("pause");
+  expect((await read(page)).runtime.parts).toEqual({
+    tyres: 1,
+    body: 1,
+    aero: 2,
+  });
   await page.locator("#start").click();
   await expect
     .poll(async () => (await read(page)).runtime.distance)
@@ -322,7 +366,7 @@ test("the complete versioned app shell is cached under the GitHub Pages subdirec
   await ready(page);
   await cached(page);
   const files = await page.evaluate(async () => {
-    const cache = await caches.open("bokuno-grand-race-v4-20261107a");
+    const cache = await caches.open("bokuno-grand-race-v5-20261107a");
     const keys = await cache.keys();
     return Promise.all(
       keys.map(async (r) => ({
@@ -339,6 +383,9 @@ test("the complete versioned app shell is cached under the GitHub Pages subdirec
       "diagnostics.js",
       "game.js",
       "driving.js",
+      "camera.js",
+      "garage.js",
+      "vehicles.js",
       "manifest.webmanifest",
       "icon.svg",
     ]

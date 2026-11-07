@@ -1,12 +1,12 @@
 {
   "name": "my-drive",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "description": "子ども向けオリジナル3Dレース / static GitHub Pages",
   "scripts": {
-    "test": "node --test tests/driving.test.js",
+    "test": "node --test tests/*.test.js",
     "test:e2e": "playwright test",
-    "check": "node --check game.js && node --check diagnostics.js && node --check service-worker.js && prettier --check index.html style.css game.js driving.js diagnostics.js service-worker.js tests playwright.config.js",
-    "format": "prettier --write index.html style.css game.js driving.js diagnostics.js service-worker.js tests playwright.config.js"
+    "check": "node --check game.js && node --check vehicles.js && node --check diagnostics.js && node --check service-worker.js && prettier --check index.html style.css game.js driving.js camera.js garage.js vehicles.js diagnostics.js service-worker.js tests playwright.config.js",
+    "format": "prettier --write index.html style.css game.js driving.js camera.js garage.js vehicles.js diagnostics.js service-worker.js tests playwright.config.js"
   },
   "repository": {
     "type": "git",

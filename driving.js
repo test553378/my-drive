@@ -1,9 +1,11 @@
 // Pure driving simulation: metres, seconds, radians. No browser or storage access.
+import { normalizeParts } from "./garage.js";
 export const LAP = 1400;
 export const TOTAL = LAP * 2;
 export const ROAD = 9.7;
 export const EDGE = ROAD - 1.75;
 export const TAU = Math.PI * 2;
+export const WHEEL_RADIUS = 0.43;
 export const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 export function center(z) {
   return (
@@ -13,6 +15,8 @@ export function center(z) {
   );
 }
 export const slope = (z) => (center(z + 1) - center(z - 1)) / 2;
+// With the chase camera looking along +Z, world -X is screen right.
+export const laneWorldX = (z, rightOffset) => center(z) - rightOffset;
 export function createRivals() {
   return [
     { z: 125, v: 37.4, l: -3.4, c: 1, wheelAngle: 0 },
@@ -21,7 +25,7 @@ export function createRivals() {
     { z: 20, v: 36.2, l: 4.4, c: 1, wheelAngle: 0 },
   ];
 }
-export function createRace(color = 0, model = 0) {
+export function createRace(color = 0, model = 0, parts = {}) {
   return {
     phase: "menu",
     z: 0,
@@ -37,6 +41,7 @@ export function createRace(color = 0, model = 0) {
     rank: 5,
     color,
     model,
+    parts: normalizeParts(parts),
     prev: 0,
     roll: 0,
     pitch: 0,
@@ -73,7 +78,7 @@ export function advance(state, rivals, seconds) {
   state.v += (targetSpeed - state.v) * (1 - Math.exp(-dt * 1.05));
   const travel = Math.min(state.v * dt, TOTAL - state.z);
   state.z += travel;
-  state.wheelAngle = (state.wheelAngle + travel / 0.57) % TAU;
+  state.wheelAngle = (state.wheelAngle + travel / WHEEL_RADIUS) % TAU;
   // Assistance follows the road automatically. Releasing both arrows recentres gently.
   const targetSteer = dir * (3.2 + state.v * 0.075);
   state.steerV += (targetSteer - state.steerV) * (1 - Math.exp(-dt * 6));
@@ -89,7 +94,7 @@ export function advance(state, rivals, seconds) {
   for (const rival of rivals) {
     const distance = rival.v * dt;
     rival.z += distance;
-    rival.wheelAngle = (rival.wheelAngle + distance / 0.57) % TAU;
+    rival.wheelAngle = (rival.wheelAngle + distance / WHEEL_RADIUS) % TAU;
     if (
       Math.abs(rival.z - state.z) < 3.6 &&
       Math.abs(rival.l - state.offset) < 2.45 &&

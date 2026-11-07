@@ -1,3 +1,6 @@
+import { VEHICLES, defaultSetup, copySetup, setupSummary } from "./garage.js";
+import { buildBody, buildWheel, buildAero } from "./vehicles.js";
+import { perspective, lookAt, mul, projectPoint } from "./camera.js";
 import {
   LAP,
   TOTAL,
@@ -5,6 +8,7 @@ import {
   TAU,
   center,
   slope,
+  laneWorldX,
   createRace,
   createRivals,
   advance,
@@ -19,7 +23,7 @@ function boot() {
   let pixelBudget =
     new URLSearchParams(location.search).get("quality") === "low"
       ? 480000
-      : 1100000;
+      : 1400000;
   let raf = 0,
     frames = 0,
     drawCalls = 0,
@@ -79,32 +83,108 @@ function boot() {
         }
       : null,
   });
-  const vs = `attribute vec3 aPos;attribute vec3 aNorm;attribute vec3 aColor;attribute float aMat;
-uniform mat4 uVP;uniform vec3 uShift;uniform float uYaw,uSpin,uRoll,uPitch;uniform vec3 uEye;
-varying mediump vec3 vWorld,vNorm,vColor;varying mediump float vMat,vFog;
+  const vs = `
+attribute vec3 aPos,aNorm,aColor; attribute float aMat;
+uniform mat4 uVP; uniform vec3 uShift,uEye;
+uniform float uYaw,uSpin,uRoll,uPitch;
+varying mediump vec3 vWorld,vNorm,vColor;
+varying mediump vec2 vSurface;
+varying mediump float vMat,vFog;
 void main(){
-vec3 p=aPos;float sn=sin(uSpin),cs=cos(uSpin);p=vec3(p.x,p.y*cs-p.z*sn,p.y*sn+p.z*cs);
-float pr=cos(uPitch),ps=sin(uPitch);p=vec3(p.x,p.y*pr-p.z*ps,p.y*ps+p.z*pr);
-float rr=cos(uRoll),rs=sin(uRoll);p=vec3(p.x*rr-p.y*rs,p.x*rs+p.y*rr,p.z);
-float y=cos(uYaw),s=sin(uYaw);p=vec3(y*p.x+s*p.z,p.y,-s*p.x+y*p.z)+uShift;
-vec3 n=vec3(aNorm.x,aNorm.y*cs-aNorm.z*sn,aNorm.y*sn+aNorm.z*cs);n=vec3(n.x,n.y*pr-n.z*ps,n.y*ps+n.z*pr);n=vec3(n.x*rr-n.y*rs,n.x*rs+n.y*rr,n.z);n=normalize(vec3(y*n.x+s*n.z,n.y,-s*n.x+y*n.z));
-vWorld=p-uEye;vNorm=n;vColor=aColor;vMat=aMat;vFog=clamp((distance(p,uEye)-125.0)/270.0,0.0,1.0);
-gl_Position=uVP*vec4(p,1.0);
+  float sn=sin(uSpin),cs=cos(uSpin),pr=cos(uPitch),ps=sin(uPitch);
+  float rr=cos(uRoll),rs=sin(uRoll),y=cos(uYaw),s=sin(uYaw);
+  vec3 p=vec3(aPos.x,aPos.y*cs-aPos.z*sn,aPos.y*sn+aPos.z*cs);
+  p=vec3(p.x,p.y*pr-p.z*ps,p.y*ps+p.z*pr);
+  p=vec3(p.x*rr-p.y*rs,p.x*rs+p.y*rr,p.z);
+  p=vec3(y*p.x+s*p.z,p.y,-s*p.x+y*p.z)+uShift;
+  vec3 n=vec3(aNorm.x,aNorm.y*cs-aNorm.z*sn,aNorm.y*sn+aNorm.z*cs);
+  n=vec3(n.x,n.y*pr-n.z*ps,n.y*ps+n.z*pr);
+  n=vec3(n.x*rr-n.y*rs,n.x*rs+n.y*rr,n.z);
+  vNorm=normalize(vec3(y*n.x+s*n.z,n.y,-s*n.x+y*n.z));
+  vWorld=p-uEye; vColor=aColor; vMat=aMat; vSurface=p.xz*.15;
+  vFog=clamp((distance(p,uEye)-135.0)/280.0,0.0,1.0);
+  gl_Position=uVP*vec4(p,1.0);
 }`;
-  const fs = `precision mediump float;
-varying mediump vec3 vWorld,vNorm,vColor;varying mediump float vMat,vFog;
-float rnd(vec2 x){return fract(sin(dot(mod(x,32.0),vec2(12.9898,7.233)))*437.5);}
-void main(){vec3 norm=normalize(vNorm);vec3 sun=normalize(vec3(-0.52,0.87,0.48));vec3 eye=normalize(-vWorld);
-float dif=max(dot(norm,sun),0.0);float light=.55+.47*dif;vec3 color=vColor*light;
-if(vMat>0.5&&vMat<1.5){float n=rnd(floor(vWorld.xz*7.0))*0.060+rnd(floor(vWorld.xz*1.9))*0.045;color=vColor*(.81+n+dif*.26);}
-if(vMat>1.5&&vMat<2.5){vec3 h=normalize(sun+eye);float spec=pow(max(dot(norm,h),0.0),34.0);float fres=pow(1.0-max(dot(norm,eye),0.0),3.0);color= vColor*(.55+.62*dif)+vec3(.98,.93,.81)*spec*.75+vec3(.25,.42,.62)*fres*.34;}
-if(vMat>2.5&&vMat<3.5){vec3 h=normalize(sun+eye);float ref=pow(max(dot(norm,h),0.0),19.0);float fres=pow(1.0-max(dot(norm,eye),0.0),2.3);color=mix(vColor,vec3(.57,.76,.91),fres*.55)+vec3(.96,.95,.85)*ref*.72;}
-if(vMat>3.5&&vMat<4.5){color=vColor*1.18;}
-if(vMat>4.5&&vMat<5.5){float tex=rnd(floor(vWorld.xz*1.4))*.10;color=vColor*(.92+tex+dif*.16);}
-color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(.92));gl_FragColor=vec4(color,1.0);
+  const fs = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying mediump vec3 vWorld,vNorm,vColor;
+varying mediump vec2 vSurface;
+varying mediump float vMat,vFog;
+uniform float uStudio;
+float grain(vec2 p){
+  vec3 q=fract(vec3(p.xyx)*.1031);
+  q+=dot(q,q.yzx+33.33);
+  return fract((q.x+q.y)*q.z);
+}
+vec4 finishColor(vec3 color){
+  if(uStudio<.5)color=mix(color,vec3(.52,.62,.71),vFog*.96);
+  color=color/(vec3(1.0)+color*.35);
+  return vec4(sqrt(max(color,vec3(0.0))),1.0);
+}
+vec3 environment(vec3 r){
+  float sky=smoothstep(-.12,.75,r.y);
+  vec3 c=mix(vec3(.12,.14,.15),vec3(.47,.63,.80),sky);
+  float horizon=exp(-abs(r.y)*13.0);
+  c+=vec3(.32,.34,.36)*horizon;
+  if(uStudio>.5){
+    c=mix(vec3(.055,.07,.09),vec3(.34,.41,.50),sky);
+    float strip=smoothstep(.35,.41,r.y)*(1.0-smoothstep(.48,.58,r.y));
+    float side=smoothstep(.82,.90,abs(r.x))*.6;
+    c+=vec3(.95,.98,1.0)*(strip+side);
+  }
+  return c;
+}
+void main(){
+  if(vMat>8.5){gl_FragColor=vec4(vec3(.018,.025,.035),vColor.r);return;}
+  vec3 n=normalize(vNorm);
+  // Scale before normalize: squared camera-relative distances must not overflow mediump.
+  vec3 sun=normalize(vec3(-.52,.87,.48));
+  float ndl=max(dot(n,sun),0.0);
+  vec3 base=vColor;
+  vec3 ambient=mix(vec3(.22,.25,.27),vec3(.47,.54,.62),n.y*.5+.5);
+  vec3 color=base*(ambient+vec3(1.02,.97,.88)*ndl*.95);
+  // Road, grass, scenery and lamps skip all vehicle reflection/specular work.
+  if(vMat<1.5||(vMat>3.5&&vMat<5.5)){
+    if(vMat>.5&&vMat<1.5)color=base*(.65+ndl*.5)*(1.0+grain(floor(vSurface*8.0))*.11);
+    else if(vMat>3.5&&vMat<4.5)color=base*2.1;
+    else if(vMat>4.5)color*=.9+grain(floor(vSurface*2.0))*.13;
+    gl_FragColor=finishColor(color);return;
+  }
+  vec3 d=-vWorld;
+  vec3 eye=normalize(d/max(1.0,max(abs(d.x),max(abs(d.y),abs(d.z)))));
+  vec3 halfway=normalize(sun+eye);
+  float ndv=clamp(dot(n,eye),0.0,1.0);
+  float fres=pow(1.0-ndv,5.0),spec=pow(max(dot(n,halfway),0.0),80.0);
+
+  if(vMat>.5&&vMat<1.5){
+    float g=grain(floor(vSurface*8.0));color=base*(.65+ndl*.5)*(1.0+g*.11);
+  }else if(vMat>1.5&&vMat<2.5){
+    vec3 reflection=environment(reflect(-eye,n));
+    float flake=grain(floor(vSurface*20.0))*.018;
+    color=base*(ambient*.82+ndl*.9)+reflection*(.04+fres*.55)+vec3(1.0,.97,.90)*spec*.85+base*flake;
+  }else if(vMat>2.5&&vMat<3.5){
+    color=base*.32+environment(reflect(-eye,n))*(.10+fres*.75)+vec3(.7,.8,.9)*spec*.4;
+  }else if(vMat>3.5&&vMat<4.5){color=base*2.1;
+  }else if(vMat>4.5&&vMat<5.5){color*=.9+grain(floor(vSurface*2.0))*.13;
+  }else if(vMat>5.5&&vMat<6.5){color=base*.16+environment(reflect(-eye,n))*vColor*(.65+fres*.35)+vec3(.95)*spec*.85;
+  }else if(vMat>6.5&&vMat<7.5){color=base*(ambient*.7+ndl*.38)+vec3(.12)*pow(max(dot(n,halfway),0.0),14.0);
+  }else if(vMat>7.5){color=base*(ambient+ndl*.5)+environment(reflect(-eye,n))*(.04+fres*.18);}
+  gl_FragColor=finishColor(color);
 }`;
   const skyvs = `attribute vec2 p;varying mediump vec2 uv;void main(){uv=p*.5+.5;gl_Position=vec4(p,0.,1.);}`;
-  const skyfs = `precision mediump float;varying mediump vec2 uv;uniform float tm;void main(){float h=smoothstep(.08,.96,uv.y);vec3 c=mix(vec3(.87,.91,.88),vec3(.12,.36,.65),pow(h,.7));float sun=1.0-smoothstep(.025,.34,length((uv-vec2(.79,.81))*vec2(1.7,1.0)));c+=vec3(.24,.17,.10)*sun;float haze=1.0-smoothstep(.05,.37,abs(uv.y-.29));c=mix(c,vec3(.82,.89,.86),haze*.29);gl_FragColor=vec4(c,1.0);}`;
+  const skyfs = `precision mediump float;varying mediump vec2 uv;uniform float uStudio;
+void main(){
+  vec3 day=mix(vec3(.80,.85,.88),vec3(.20,.38,.60),smoothstep(.14,1.0,uv.y));
+  float sun=1.0-smoothstep(.015,.20,length((uv-vec2(.78,.83))*vec2(1.5,1.0)));
+  day+=vec3(.19,.14,.07)*sun;
+  vec3 studio=mix(vec3(.08,.11,.16),vec3(.035,.052,.08),uv.y);
+  studio+=vec3(.03,.04,.055)*(1.0-smoothstep(.1,.8,length(uv-vec2(.5,.4))));
+  gl_FragColor=vec4(mix(day,studio,uStudio),1.0);
+}`;
   function compile(type, code, label) {
     D.event("shader-compile", label);
     const s = gl.createShader(type);
@@ -160,8 +240,12 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
       roll: gl.getUniformLocation(prog, "uRoll"),
       pitch: gl.getUniformLocation(prog, "uPitch"),
       eye: gl.getUniformLocation(prog, "uEye"),
+      studio: gl.getUniformLocation(prog, "uStudio"),
     };
-    skLoc = { p: gl.getAttribLocation(skyp, "p") };
+    skLoc = {
+      p: gl.getAttribLocation(skyp, "p"),
+      studio: gl.getUniformLocation(skyp, "uStudio"),
+    };
     skybuf = gl.createBuffer();
     if (!skybuf) throw Error("Sky buffer allocation failed");
     gl.bindBuffer(gl.ARRAY_BUFFER, skybuf);
@@ -172,7 +256,7 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
     );
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
-    gl.clearColor(0.52, 0.74, 0.85, 1);
+    gl.clearColor(0.035, 0.052, 0.08, 1);
   }
   try {
     setupPrograms();
@@ -181,7 +265,7 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
       D.failure("gpu-setup-failed", e.message);
     return;
   }
-  const meshes = [];
+  const meshes = new Set();
   const C = (r, g, b) => [r / 255, g / 255, b / 255],
     K = C(12, 15, 21),
     RIM = C(162, 174, 178),
@@ -203,7 +287,7 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
       this.buffer = null;
       this.count = 0;
       this.vertices = null;
-      meshes.push(this);
+      meshes.add(this);
     }
     tri(a, b, c, col, mat = 0) {
       const v = [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
@@ -215,11 +299,25 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
         ],
         mag = Math.hypot(...n) || 1;
       n = n.map((x) => x / mag);
-      for (const x of [a, b, c]) this.data.push(...x, ...n, ...col, mat);
+      for (const [i, x] of [a, b, c].entries())
+        this.data.push(
+          ...x,
+          ...n,
+          ...(Array.isArray(col[0]) ? col[i] : col),
+          mat,
+        );
       return this;
     }
     quad(a, b, c, d, col, mat = 0) {
-      return this.tri(a, b, c, col, mat).tri(a, c, d, col, mat);
+      return Array.isArray(col[0])
+        ? this.tri(a, b, c, [col[0], col[1], col[2]], mat).tri(
+            a,
+            c,
+            d,
+            [col[0], col[2], col[3]],
+            mat,
+          )
+        : this.tri(a, b, c, col, mat).tri(a, c, d, col, mat);
     }
     box(x, y, z, w, h, l, col, mat = 0) {
       const x0 = x - w / 2,
@@ -286,8 +384,8 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
           q = [x + r * Math.cos(b), y, z + r * Math.sin(b)],
           pt = [p[0], y + h, p[2]],
           qt = [q[0], y + h, q[2]];
-        this.quad(p, q, qt, pt, col, mat);
-        this.tri([x, y + h, z], pt, qt, col, mat);
+        this.quad(p, pt, qt, q, col, mat);
+        this.tri([x, y + h, z], qt, pt, col, mat);
       }
       return this;
     }
@@ -317,6 +415,12 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
     done() {
       this.count = this.data.length / 10;
       this.vertices = new Float32Array(this.data);
+      // Convert the fixed vertex palette once, rather than per pixel per frame.
+      // Alpha-only contact-shadow vertices retain their original values.
+      for (let i = 0; i < this.vertices.length; i += 10)
+        if (this.vertices[i + 9] !== 9)
+          for (let c = 6; c < 9; c++)
+            this.vertices[i + c] = this.vertices[i + c] * this.vertices[i + c];
       this.data = [];
       this.upload();
       return this;
@@ -607,296 +711,77 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
     chunk.road.done();
     chunk.deco.done();
   }
-  // A world-space supercar with detailed wheel arches, glazed cockpit and rear wing.
-  function supercar(paint, sport = false) {
-    let m = new Mesh(),
-      dark = shade(paint, 0.7),
-      bright = shade(paint, 1.14);
-    // Floor and sculpted side air intakes.
-    m.box(0, 0.36, 0, 2.45, 0.39, 5.1, C(27, 31, 37));
-    const slices = [
-      [-2.72, 1.03, 0.69],
-      [-2.35, 1.13, 0.83],
-      [-1.34, 1.16, 0.93],
-      [0.55, 1.15, 0.89],
-      [1.45, 1.05, 0.79],
-      [2.53, 0.99, 0.66],
-      [2.66, 0.9, 0.57],
-    ];
-    for (let i = 0; i < slices.length - 1; i++) {
-      const [z, w, y] = slices[i],
-        [zz, ww, yy] = slices[i + 1];
-      const section = (width, height, depth) => [
-        [-width, height - 0.08, depth],
-        [-width * 0.72, height + 0.035, depth],
-        [width * 0.72, height + 0.035, depth],
-        [width, height - 0.08, depth],
-      ];
-      const frontSection = section(w, y, z),
-        rearSection = section(ww, yy, zz);
-      for (let strip = 0; strip < 3; strip++)
-        m.quad(
-          frontSection[strip],
-          rearSection[strip],
-          rearSection[strip + 1],
-          frontSection[strip + 1],
-          strip === 1 ? bright : paint,
-          2,
-        );
-      for (const s of [-1, 1])
-        m.quad(
-          [s * w, 0.3, z],
-          [s * w, y - 0.08, z],
-          [s * ww, yy - 0.08, zz],
-          [s * ww, 0.3, zz],
-          s === 1 ? paint : dark,
-          2,
-        );
-    }
-    for (const [z, w, y] of [slices[0], slices[slices.length - 1]])
-      m.quad([-w, 0.3, z], [w, 0.3, z], [w, y, z], [-w, y, z], paint, 2);
-    // Raised wheel arches have an open tyre cutout, with a curved painted shoulder.
-    for (const s of [-1, 1])
-      for (const z of [-1.67, 1.63]) {
-        const point = (x, r, a) => [
-          s * x,
-          0.47 + r * Math.sin(a),
-          z + r * Math.cos(a),
-        ];
-        for (let i = 0; i < 12; i++) {
-          const a = (i * Math.PI) / 12,
-            b = ((i + 1) * Math.PI) / 12;
-          m.quad(
-            point(1.42, 0.59, a),
-            point(1.42, 0.72, a),
-            point(1.42, 0.72, b),
-            point(1.42, 0.59, b),
-            paint,
-            2,
-          );
-          m.quad(
-            point(1.42, 0.72, a),
-            point(1.02, 0.63, a),
-            point(1.02, 0.63, b),
-            point(1.42, 0.72, b),
-            bright,
-            2,
-          );
-        }
-      }
-    for (const s of [-1, 1])
-      m.box(s * 0.3, 0.915, 1.47, 0.09, 0.025, 0.73, shade(paint, 0.58), 2);
-    // Two original silhouettes: a low mid-engine car and a taller sports coupe.
-    let rear = [-0.78, 0.99, -1.64],
-      rearR = [0.78, 0.99, -1.64],
-      roofRear = [-0.72, 1.68, -0.79],
-      roofRearR = [0.72, 1.68, -0.79],
-      roofFront = [-0.7, 1.71, 0.28],
-      roofFrontR = [0.7, 1.71, 0.28],
-      front = [-1.02, 0.88, 1.25],
-      frontR = [1.02, 0.88, 1.25];
-    if (sport) {
-      for (const v of [roofRear, roofRearR, roofFront, roofFrontR]) {
-        v[1] += 0.14;
-        v[2] -= 0.28;
-      }
-      front[2] -= 0.25;
-      frontR[2] -= 0.25;
-    }
-    m.quad(rear, rearR, roofRearR, roofRear, GLASS, 3);
-    m.quad(roofRear, roofRearR, roofFrontR, roofFront, paint, 2);
-    m.quad(roofFront, roofFrontR, frontR, front, GLASS, 3);
-    m.quad(rear, roofRear, roofFront, front, C(18, 51, 71), 3);
-    m.quad(rearR, frontR, roofFrontR, roofRearR, C(24, 59, 83), 3);
-    // Frame detail and engine deck.
-    m.box(
-      0,
-      sport ? 1.84 : 1.7,
-      sport ? -0.58 : -0.3,
-      1.48,
-      0.07,
-      1.02,
-      shade(paint, 0.7),
-      2,
-    );
-    for (const s of [-1, 1]) {
-      m.box(s * 1.14, 0.52, -0.18, 0.12, 0.16, 2.65, C(17, 24, 27));
-      m.box(s * 1.09, 0.34, 1.15, 0.2, 0.18, 2.2, C(20, 25, 30));
-      m.box(s * 1.08, 0.79, -1.25, 0.17, 0.07, 1.25, shade(paint, 0.48), 2);
-      m.box(s * 0.95, 1.04, 0.84, 0.26, 0.11, 0.48, C(28, 40, 46), 2);
-      // Mirrors and mirror stems.
-      m.box(s * 1.18, 1.06, 0.45, 0.39, 0.16, 0.36, C(24, 31, 35), 2);
-      m.box(s * 1.35, 1.19, 0.47, 0.32, 0.16, 0.31, paint, 2);
-      // Front projector LEDs and tail lights.
-      m.box(s * 0.76, 0.72, 2.64, 0.55, 0.08, 0.035, C(242, 241, 221), 4);
-      m.box(s * 0.76, 0.61, 2.65, 0.55, 0.085, 0.035, C(229, 240, 247), 4);
-      m.box(s * 0.72, 0.7, -2.74, 0.69, 0.14, 0.04, C(241, 38, 35), 4);
-      m.box(s * 0.72, 0.79, -2.76, 0.58, 0.035, 0.05, C(250, 95, 55), 4);
-      // Door creases, lower skirt, rear vent.
-      m.box(s * 1.18, 0.54, -0.3, 0.055, 0.055, 1.75, shade(paint, 0.4));
-      m.box(s * 1.15, 0.59, -1.35, 0.085, 0.24, 0.63, K);
-    }
-    // Bonnet / aerodynamics / wing.
-    m.box(0, 0.32, 2.56, 2.34, 0.17, 0.3, C(21, 28, 35));
-    m.box(0, 0.38, -2.64, 2.26, 0.2, 0.28, C(19, 25, 31));
-    m.box(0, 0.72, 2.68, 1.28, 0.26, 0.05, C(24, 30, 36));
-    for (let s of [-1, 1]) {
-      if (!sport) m.box(s * 0.91, 1.23, -2.45, 0.13, 0.91, 0.15, C(24, 30, 38));
-      m.box(s * 0.52, 0.45, -2.78, 0.29, 0.16, 0.14, C(14, 16, 20));
-    }
-    if (sport) {
-      m.box(0, 0.91, -2.4, 2.22, 0.1, 0.27, paint, 2);
-      m.box(0, 0.84, 1.87, 1.5, 0.08, 0.32, shade(paint, 0.55), 2);
-    } else {
-      m.box(0, 1.66, -2.45, 2.6, 0.12, 0.44, C(22, 32, 39), 2);
-      m.box(0, 1.49, -2.45, 2.7, 0.09, 0.48, shade(paint, 0.62), 2);
-    }
-    for (let i = 0; i < (sport ? 0 : 6); i++)
-      m.box(-0.47 + i * 0.19, 0.97, -1.88, 0.07, 0.05, 0.65, C(29, 34, 40));
-    // Number plate in original style.
-    m.box(0, 0.69, -2.77, 0.7, 0.2, 0.045, C(239, 238, 220));
-    return m.done();
-  }
-  const bodies = [
-    colors.map((paint) => supercar(paint)),
-    colors.map((paint) => supercar(paint, true)),
+  const bodyCache = new Map(),
+    aeroCache = new Map();
+  const wheels = [buildWheel(Mesh, 0), buildWheel(Mesh, 1)];
+  const distantWheels = [
+    buildWheel(Mesh, 0, false),
+    buildWheel(Mesh, 1, false),
   ];
-  function makeWheel() {
-    let m = new Mesh(),
-      N = 22,
-      r = 0.57,
-      hw = 0.29;
-    for (let j = 0; j < N; j++) {
-      let a = (j * TAU) / N,
-        b = ((j + 1) * TAU) / N,
-        c = Math.cos(a),
-        s = Math.sin(a),
-        cb = Math.cos(b),
-        sb = Math.sin(b);
-      m.quad(
-        [-hw, r * c, r * s],
-        [hw, r * c, r * s],
-        [hw, r * cb, r * sb],
-        [-hw, r * cb, r * sb],
-        C(15 + (j % 3), 19 + (j % 2), 22),
+  function vehicleMeshes(setup, detailed = true) {
+    const { model, color, parts } = setup;
+    const bodyKey = `${detailed ? 1 : 0}:${model}:${color}:${parts.body}`,
+      aeroKey = `${model}:${parts.body}:${parts.aero}`;
+    if (!bodyCache.has(bodyKey))
+      bodyCache.set(
+        bodyKey,
+        buildBody(Mesh, colors[color], model, parts.body, detailed),
       );
-      for (const side of [-1, 1]) {
-        let x = side * hw;
-        m.quad(
-          [x, r * c, r * s],
-          [x, r * cb, r * sb],
-          [x, 0.37 * cb, 0.37 * sb],
-          [x, 0.37 * c, 0.37 * s],
-          C(27, 29, 32),
-        );
-        m.quad(
-          [x, 0.37 * c, 0.37 * s],
-          [x, 0.37 * cb, 0.37 * sb],
-          [x, 0.25 * cb, 0.25 * sb],
-          [x, 0.25 * c, 0.25 * s],
-          C(166, 174, 177),
-          2,
-        );
-      }
-    }
-    for (let i = 0; i < 7; i++) {
-      let a = (i * TAU) / 7;
-      for (const side of [-1, 1]) {
-        const xx = side * (hw + 0.015);
-        m.quad(
-          [xx, -0.055, -0.055],
-          [xx, 0.055, 0.055],
-          [xx, 0.36 * Math.cos(a + 0.17), 0.36 * Math.sin(a + 0.17)],
-          [xx, 0.36 * Math.cos(a - 0.17), 0.36 * Math.sin(a - 0.17)],
-          C(205, 217, 218),
-          2,
-        );
-      }
-    }
-    for (const side of [-1, 1])
-      m.box(side * (hw + 0.02), 0, 0, 0.05, 0.23, 0.23, C(75, 85, 90));
-    return m.done();
+    if (!aeroCache.has(aeroKey))
+      aeroCache.set(aeroKey, buildAero(Mesh, model, parts.body, parts.aero));
+    return {
+      body: bodyCache.get(bodyKey),
+      aero: aeroCache.get(aeroKey),
+      wheel: (detailed ? wheels : distantWheels)[parts.tyres],
+    };
   }
-  const wheel = makeWheel();
   function makeShadow() {
-    let m = new Mesh();
-    const rings = [
-      { r: 0, c: C(18, 25, 25) },
-      { r: 0.65, c: C(26, 34, 34) },
-      { r: 1, c: C(39, 46, 43) },
-    ];
-    for (let j = 0; j < 2; j++)
-      for (let i = 0; i < 20; i++) {
-        let a = (i * TAU) / 20,
-          b = ((i + 1) * TAU) / 20,
-          ra = rings[j].r,
-          rb = rings[j + 1].r;
-        let p = (r, ang) => [
-          Math.cos(ang) * 1.75 * r,
+    const m = new Mesh(),
+      rings = [
+        [0, 0.36],
+        [0.52, 0.31],
+        [0.83, 0.12],
+        [1.12, 0],
+      ];
+    for (let j = 0; j < rings.length - 1; j++)
+      for (let i = 0; i < 32; i++) {
+        const a = (i * TAU) / 32,
+          b = ((i + 1) * TAU) / 32,
+          [ra, aa] = rings[j],
+          [rb, ab] = rings[j + 1];
+        const point = (r, t) => [
+          Math.cos(t) * 1.28 * r,
           0,
-          Math.sin(ang) * 3.25 * r,
+          Math.sin(t) * 2.65 * r,
         ];
-        m.quad(p(ra, a), p(ra, b), p(rb, b), p(rb, a), rings[j].c);
+        m.quad(
+          point(ra, a),
+          point(ra, b),
+          point(rb, b),
+          point(rb, a),
+          [
+            [aa, 0, 0],
+            [aa, 0, 0],
+            [ab, 0, 0],
+            [ab, 0, 0],
+          ],
+          9,
+        );
       }
     return m.done();
   }
   const shadow = makeShadow();
+  const studioFloor = new Mesh()
+    .box(0, -0.24, 0, 200, 0.1, 200, C(31, 37, 46), 0)
+    .done();
+  const studioStage = new Mesh()
+    .cylinder(0, -0.17, 0, 3.2, 0.17, C(64, 73, 84), 6, 96)
+    .done();
   const ai = createRivals();
-  function perspective(fov, ar, n, f) {
-    const o = new Float32Array(16),
-      v = 1 / Math.tan(fov / 2);
-    o[0] = v / ar;
-    o[5] = v;
-    o[10] = (f + n) / (n - f);
-    o[11] = -1;
-    o[14] = (2 * f * n) / (n - f);
-    return o;
-  }
-  function lookAt(e, t) {
-    const norm = (a) => {
-        let v = Math.hypot(...a) || 1;
-        return a.map((x) => x / v);
-      },
-      cross = (a, b) => [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-      ],
-      sub = (a, b) => a.map((x, i) => x - b[i]),
-      dot = (a, b) => a.reduce((v, x, i) => v + x * b[i], 0);
-    let f = norm(sub(t, e)),
-      s = norm(cross(f, [0, 1, 0])),
-      u = cross(s, f);
-    return new Float32Array([
-      s[0],
-      u[0],
-      -f[0],
-      0,
-      s[1],
-      u[1],
-      -f[1],
-      0,
-      s[2],
-      u[2],
-      -f[2],
-      0,
-      -dot(s, e),
-      -dot(u, e),
-      dot(f, e),
-      1,
-    ]);
-  }
-  function mul(a, b) {
-    const o = new Float32Array(16);
-    for (let c = 0; c < 4; c++)
-      for (let r = 0; r < 4; r++)
-        for (let k = 0; k < 4; k++) o[c * 4 + r] += a[k * 4 + r] * b[c * 4 + k];
-    return o;
-  }
   let WIDTH = 0,
     HEIGHT = 0;
   function resize() {
-    const dpr = Math.min(devicePixelRatio || 1, 1.5),
+    const dpr = Math.min(devicePixelRatio || 1, 1.6),
       iw = Math.max(1, innerWidth),
       ih = Math.max(1, innerHeight);
     const scale = Math.min(
@@ -917,14 +802,60 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
     }
     gl.viewport(0, 0, w, h);
   }
-  const S = createRace();
+  const setups = [defaultSetup(0), defaultSetup(1)];
+  const S = createRace(setups[0].color, 0, setups[0].parts);
+  let garageYaw = -0.24,
+    previewDrag = null,
+    lastView = null;
+  let screenPosition = { player: [0, 0], laneCenter: [0, 0] };
+  const inGarage = () => S.phase === "menu" || S.phase === "finish";
+  const canCustomize = () => inGarage() && graphicsReady;
+  function refreshGarage() {
+    const vehicle = VEHICLES[S.model];
+    $("garage-car-name").textContent = vehicle.name;
+    $("garage-car-type").textContent = vehicle.label;
+    canvas.setAttribute(
+      "aria-label",
+      inGarage() ? `${vehicle.name}の3Dプレビュー` : "3Dスーパーカーレース",
+    );
+    for (const button of document.querySelectorAll("[data-model]"))
+      button.setAttribute(
+        "aria-pressed",
+        String(Number(button.dataset.model) === S.model),
+      );
+    for (const button of document.querySelectorAll("[data-color]")) {
+      const selected = Number(button.dataset.color) === S.color;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    }
+    for (const button of document.querySelectorAll("[data-part]"))
+      button.setAttribute(
+        "aria-pressed",
+        String(Number(button.dataset.value) === S.parts[button.dataset.part]),
+      );
+    $("garage-preview").setAttribute(
+      "aria-label",
+      `${setupSummary(S)}。左右にドラッグして回転`,
+    );
+    vehicleMeshes(S);
+  }
+  function rememberSetup() {
+    setups[S.model] = copySetup(S);
+    refreshGarage();
+  }
+
   D.observe(() => ({
     phase: S.phase,
     distance: Math.round(S.z),
     offset: Number(S.offset.toFixed(2)),
     speed: Number(S.v.toFixed(1)),
     steering: [S.steerL, S.steerR],
-    model: S.model === 0 ? "NOVA R" : "AERO S",
+    model: VEHICLES[S.model].name,
+    parts: { ...S.parts },
+    screen: screenPosition,
+    garage: inGarage(),
+    garageYaw: Number(garageYaw.toFixed(2)),
+    modelCacheSize: bodyCache.size,
     color: S.color,
     frames,
     drawCalls,
@@ -933,7 +864,10 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
     pixelBudget,
     qualityChanges,
     bufferSize: [WIDTH, HEIGHT],
-    meshBytes: meshes.reduce((n, m) => n + m.vertices.byteLength, 0),
+    meshBytes: Array.from(meshes).reduce(
+      (n, m) => n + m.vertices.byteLength,
+      0,
+    ),
     contextLost: gl.isContextLost(),
   }));
   resize();
@@ -1018,8 +952,11 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
     for (const id of ["left", "right"]) $(id).classList.remove("is-down");
   }
   function reset() {
-    const { color, model } = S;
-    Object.assign(S, createRace(color, model), { phase: "countdown" });
+    const { color, model, parts } = copySetup(S);
+    Object.assign(S, createRace(color, model, parts), { phase: "countdown" });
+    document.body.classList.remove("in-garage");
+    $("modal").classList.remove("paused");
+    canvas.setAttribute("aria-label", "3Dスーパーカーレース");
     ai.splice(0, ai.length, ...createRivals());
     $("modal").classList.add("hidden");
     $("countdown").classList.add("visible");
@@ -1029,6 +966,9 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
   }
   function finish() {
     S.phase = "finish";
+    document.body.classList.add("in-garage");
+    $("modal").classList.remove("paused");
+    refreshGarage();
     clearControls();
     $("modal").classList.remove("hidden");
     $("kicker").textContent = "🏁 FINISH";
@@ -1045,6 +985,7 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
   function pause() {
     if (S.phase === "race" || S.phase === "countdown") {
       pausedPhase = S.phase;
+      $("modal").classList.add("paused");
       S.phase = "pause";
       clearControls();
       $("pause").textContent = "▶";
@@ -1062,6 +1003,7 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
   function resume() {
     if (!graphicsReady || document.hidden) return;
     S.phase = pausedPhase;
+    $("modal").classList.remove("paused");
     clearControls();
     S.prev = 0;
     $("modal").classList.add("hidden");
@@ -1087,30 +1029,116 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
     if (S.phase === "race") $("countdown").classList.remove("visible");
     metric();
   }
-  function carAt(z, offset, col, wheelAngle, player) {
-    const x = center(z) + offset,
-      y =
-        0.14 +
-        (reducedMotion ? 0 : player ? S.bounce : 0.01 * Math.sin(z * 0.85)),
-      yaw = Math.atan(slope(z)) + (player ? S.steerV * 0.014 : 0),
-      roll = player && !reducedMotion ? S.roll : 0,
-      pitch = player && !reducedMotion ? S.pitch : 0;
-    draw(shadow, x, 0.067, z, yaw);
-    draw(bodies[player ? S.model : col % 2][col], x, y, z, yaw, 0, roll, pitch);
-    for (const wheelZ of [-1.67, 1.63])
+  function drawVehicle(
+    setup,
+    x,
+    y,
+    z,
+    yaw,
+    wheelAngle = 0,
+    roll = 0,
+    pitch = 0,
+    steer = 0,
+    detailed = true,
+  ) {
+    const geometry = vehicleMeshes(setup, detailed),
+      spec = VEHICLES[setup.model];
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+    draw(shadow, x + 0.14, 0.018, z - 0.15, yaw);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+    draw(geometry.body, x, y, z, yaw, 0, roll, pitch);
+    if (geometry.aero) draw(geometry.aero, x, y, z, yaw, 0, roll, pitch);
+    for (const wheelZ of spec.wheelZ)
       for (const side of [-1, 1]) {
-        const xx = side * 1.19,
-          zz = wheelZ,
-          wx = x + Math.cos(yaw) * xx + Math.sin(yaw) * zz,
+        const xx = side * (setup.parts.body ? 1.075 : 0.965),
+          zz = wheelZ;
+        const wx = x + Math.cos(yaw) * xx + Math.sin(yaw) * zz,
           wz = z - Math.sin(yaw) * xx + Math.cos(yaw) * zz;
-        const steer = player && wheelZ > 0 ? S.steerV * 0.035 : 0;
-        draw(wheel, wx, y + 0.47, wz, yaw + steer, wheelAngle);
+        draw(
+          geometry.wheel,
+          wx,
+          y + 0.44,
+          wz,
+          yaw + (wheelZ > 0 ? steer : 0),
+          wheelAngle,
+        );
       }
   }
-  function drawSky() {
+  function carAt(z, offset, col, wheelAngle, player) {
+    const x = laneWorldX(z, offset),
+      y =
+        0.025 +
+        (reducedMotion
+          ? 0
+          : player
+            ? S.bounce * 0.5
+            : 0.005 * Math.sin(z * 0.85));
+    const yaw = Math.atan(slope(z)) - (player ? S.steerV * 0.014 : 0);
+    if (player && lastView)
+      screenPosition = {
+        player: projectPoint(lastView, [x, 0.6, z]).slice(0, 2),
+        laneCenter: projectPoint(lastView, [center(z), 0.6, z]).slice(0, 2),
+      };
+    const setup = player
+      ? S
+      : {
+          model: col % 2,
+          color: col,
+          parts: { tyres: 1, body: col % 2, aero: col % 2 ? 1 : 2 },
+        };
+    drawVehicle(
+      setup,
+      x,
+      y,
+      z,
+      yaw,
+      wheelAngle,
+      player && !reducedMotion ? S.roll : 0,
+      player && !reducedMotion ? S.pitch : 0,
+      player ? -S.steerV * 0.035 : 0,
+      player,
+    );
+  }
+  function renderGarage() {
+    const rect = $("garage-preview").getBoundingClientRect(),
+      sx = WIDTH / innerWidth,
+      sy = HEIGHT / innerHeight;
+    const vw = Math.max(1, Math.floor(rect.width * sx)),
+      vh = Math.max(1, Math.floor(rect.height * sy));
+    gl.viewport(
+      Math.floor(rect.left * sx),
+      Math.floor(HEIGHT - rect.bottom * sy),
+      vw,
+      vh,
+    );
+    drawSky(1);
+    gl.useProgram(prog);
+    gl.uniform1f(loc.studio, 1);
+    const eye = [6.2, 3.1, 8.5],
+      view = mul(
+        perspective(
+          ((vw / vh > 1.5 ? 28 : 38) * Math.PI) / 180,
+          vw / vh,
+          0.1,
+          110,
+        ),
+        lookAt(eye, [0, 0.65, 0]),
+      );
+    gl.uniformMatrix4fv(loc.vp, false, view);
+    gl.uniform3fv(loc.eye, eye);
+    draw(studioFloor);
+    draw(studioStage);
+    drawVehicle(S, 0, 0.025, 0, garageYaw);
+    gl.viewport(0, 0, WIDTH, HEIGHT);
+  }
+  function drawSky(studio = 0) {
     gl.disable(gl.DEPTH_TEST);
     gl.depthMask(false);
     gl.useProgram(skyp);
+    gl.uniform1f(skLoc.studio, studio);
     gl.bindBuffer(gl.ARRAY_BUFFER, skybuf);
     for (const a of [loc.p, loc.n, loc.c, loc.m])
       gl.disableVertexAttribArray(a);
@@ -1137,9 +1165,11 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
         dt = Math.min(0.2, rawDt);
       S.prev = timestamp;
       if (rawDt > 0) {
-        frameMs += (Math.min(rawDt * 1000, 200) - frameMs) * 0.03;
+        frameMs += (Math.min(rawDt * 1000, 1000) - frameMs) * 0.03;
         slowSeconds =
-          frameMs > 40 ? slowSeconds + dt : Math.max(0, slowSeconds - dt);
+          frameMs > 40
+            ? slowSeconds + Math.min(rawDt, 1)
+            : Math.max(0, slowSeconds - dt);
       }
       if (slowSeconds > 3 && pixelBudget > 480000) {
         pixelBudget = Math.max(480000, Math.round(pixelBudget * 0.75));
@@ -1151,54 +1181,59 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
         );
       }
       resize();
-      update(dt);
+      update(S.phase === "countdown" ? Math.min(rawDt, 0.5) : dt);
       applyAudio();
       drawCalls = 0;
       vertices = 0;
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-      drawSky();
-      gl.clear(gl.DEPTH_BUFFER_BIT);
-      gl.useProgram(prog);
-      const z = S.z,
-        x = center(z) + S.offset;
-      S.camX += (x - S.camX) * (1 - Math.exp(-dt * 3.9));
-      // Longitudinal lag would add speed/response metres to the chase distance.
-      // Speed itself is already smooth, so maintain a constant viewing distance.
-      S.camZ = z;
-      const targetH = S.boost > 0 && !reducedMotion ? 3.15 : 3.45;
-      S.camH += (targetH - S.camH) * (1 - Math.exp(-dt * 2.4));
-      const eye = [
-          S.camX + (reducedMotion ? 0 : S.roll),
-          S.camH,
-          S.camZ - 10.5,
-        ],
-        aim = [center(z + 38) * 0.64 + x * 0.36, 1.1, z + 34];
-      const view = mul(
-        perspective(
-          ((62 + (S.boost > 0 && !reducedMotion ? 3 : 0)) * Math.PI) / 180,
-          WIDTH / HEIGHT,
-          0.2,
-          435,
-        ),
-        lookAt(eye, aim),
-      );
-      gl.uniformMatrix4fv(loc.vp, false, view);
-      gl.uniform3fv(loc.eye, new Float32Array(eye));
-      const step = Math.floor(z / LAP);
-      for (let i = step - 1; i <= step + 1; i++)
-        for (const chunk of chunks) {
-          const start = i * LAP + chunk.start;
-          // Scenery may extend 15m beyond its segment. Preserve it at the frustum edge.
-          if (start + CHUNK < z - 65 || start > z + 455) continue;
-          draw(chunk.road, 0, 0, i * LAP);
-          draw(chunk.deco, 0, 0, i * LAP);
-        }
-      for (const r of ai)
-        if (r.z > z - 35 && r.z < z + 240)
-          carAt(r.z, r.l, r.c, r.wheelAngle, false);
-      carAt(z, S.offset, S.color, S.wheelAngle, true);
-      if ($("toast").classList.contains("show") && timestamp > toastEnd)
-        $("toast").classList.remove("show");
+      if (inGarage()) renderGarage();
+      else {
+        drawSky();
+        gl.clear(gl.DEPTH_BUFFER_BIT);
+        gl.useProgram(prog);
+        const z = S.z,
+          x = laneWorldX(z, S.offset);
+        S.camX += (x - S.camX) * (1 - Math.exp(-dt * 3.9));
+        // Longitudinal lag would add speed/response metres to the chase distance.
+        // Speed itself is already smooth, so maintain a constant viewing distance.
+        S.camZ = z;
+        const targetH = S.boost > 0 && !reducedMotion ? 3.15 : 3.45;
+        S.camH += (targetH - S.camH) * (1 - Math.exp(-dt * 2.4));
+        const eye = [
+            S.camX + (reducedMotion ? 0 : S.roll),
+            S.camH,
+            S.camZ - 10.5,
+          ],
+          aim = [center(z + 38) * 0.64 + x * 0.36, 1.1, z + 34];
+        const view = mul(
+          perspective(
+            ((62 + (S.boost > 0 && !reducedMotion ? 3 : 0)) * Math.PI) / 180,
+            WIDTH / HEIGHT,
+            0.2,
+            435,
+          ),
+          lookAt(eye, aim),
+        );
+        lastView = view;
+        gl.uniform1f(loc.studio, 0);
+        gl.uniformMatrix4fv(loc.vp, false, view);
+        gl.uniform3fv(loc.eye, new Float32Array(eye));
+        const step = Math.floor(z / LAP);
+        for (let i = step - 1; i <= step + 1; i++)
+          for (const chunk of chunks) {
+            const start = i * LAP + chunk.start;
+            // Scenery may extend 15m beyond its segment. Preserve it at the frustum edge.
+            if (start + CHUNK < z - 65 || start > z + 455) continue;
+            draw(chunk.road, 0, 0, i * LAP);
+            draw(chunk.deco, 0, 0, i * LAP);
+          }
+        for (const r of ai)
+          if (r.z > z - 35 && r.z < z + 240)
+            carAt(r.z, r.l, r.c, r.wheelAngle, false);
+        carAt(z, S.offset, S.color, S.wheelAngle, true);
+        if ($("toast").classList.contains("show") && timestamp > toastEnd)
+          $("toast").classList.remove("show");
+      }
       if (firstFrame || frames % 120 === 0) {
         const error = gl.getError();
         if (error !== gl.NO_ERROR) {
@@ -1218,21 +1253,55 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
       D.failure("render-failed", e.message);
     }
   }
-  for (const b of document.querySelectorAll(".swatch"))
-    b.addEventListener("click", () => {
-      S.color = Number(b.dataset.color);
-      document
-        .querySelectorAll(".swatch")
-        .forEach((x) => x.classList.toggle("selected", x === b));
-    });
-  for (const button of document.querySelectorAll("[data-model]")) {
+  for (const button of document.querySelectorAll("[data-color]"))
     button.addEventListener("click", () => {
-      S.model = Number(button.dataset.model);
-      document
-        .querySelectorAll("[data-model]")
-        .forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+      if (!canCustomize()) return;
+      S.color = Number(button.dataset.color);
+      rememberSetup();
     });
-  }
+  for (const button of document.querySelectorAll("[data-model]"))
+    button.addEventListener("click", () => {
+      if (!canCustomize()) return;
+      setups[S.model] = copySetup(S);
+      const setup = copySetup(setups[Number(button.dataset.model)]);
+      S.model = setup.model;
+      S.color = setup.color;
+      S.parts = setup.parts;
+      garageYaw = -0.24;
+      refreshGarage();
+    });
+  for (const button of document.querySelectorAll("[data-part]"))
+    button.addEventListener("click", () => {
+      if (!canCustomize()) return;
+      S.parts[button.dataset.part] = Number(button.dataset.value);
+      rememberSetup();
+    });
+  const preview = $("garage-preview");
+  preview.addEventListener("pointerdown", (e) => {
+    if (!canCustomize()) return;
+    e.preventDefault();
+    previewDrag = { id: e.pointerId, x: e.clientX };
+    try {
+      preview.setPointerCapture(e.pointerId);
+    } catch {}
+  });
+  preview.addEventListener("pointermove", (e) => {
+    if (!previewDrag || e.pointerId !== previewDrag.id) return;
+    garageYaw += (e.clientX - previewDrag.x) * 0.009;
+    previewDrag.x = e.clientX;
+  });
+  for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
+    preview.addEventListener(event, () => {
+      previewDrag = null;
+    });
+  preview.addEventListener("keydown", (e) => {
+    if (!canCustomize()) return;
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      garageYaw += e.key === "ArrowLeft" ? -0.15 : 0.15;
+    }
+  });
+  $("garage-help").addEventListener("click", () => $("help").click());
   $("start").addEventListener("click", () => {
     if (!graphicsReady) return;
     if (S.phase === "pause") resume();
@@ -1367,6 +1436,7 @@ color=mix(color,vec3(.66,.79,.85),vFog*.96);color=pow(max(color,vec3(0.0)),vec3(
     );
   metric();
   graphicsReady = true;
+  refreshGarage();
   schedule();
 }
 try {
