@@ -1,12 +1,17 @@
-ぼくの GRAND RACE Ver.4
+ぼくの GRAND RACE Ver.5（iPad 第9世代を対象）
+
+左右操作の画面方向を修正し、3Dガレージと車種ごとのパーツ選択を追加しました。
+NOVA R / AERO S、タイヤ2種、ボディ2種、エアロ3種、塗装4色を選べます。
+どのパーツでも同じやさしい操作で走れます。
 
 変更内容・操作方法・GitHub Pagesでの配置方法：README.md
-原因調査・自動テスト結果・iPad実機での確認項目：docs/VERIFICATION.md
+今回の原因調査・検証結果・実機確認：docs/V5-VERIFICATION.md
+過去のWebGL初期化エラーの記録：docs/VERIFICATION.md
 
-Ver.3のアップロード手順（4ファイルだけの更新）はVer.4では使用しません。
-index.htmlに加え、style.css、diagnostics.js、game.js、driving.js、
-service-worker.js、manifest.webmanifest、icon.svg、.nojekyllが必要です。
-GitHub上のPRをマージすれば必要ファイルがまとめて更新されます。
+必要な実行ファイルはREADME.mdの一覧を確認してください。
+旧版の4ファイルのみのアップロード手順は使用しません。
+旧版が出る場合はオンラインで再読み込みし、ページを閉じて開き直してください。
+右上「？」の診断で version が 5.0.0 であることを確認できます。
 
-iPad実機では未検証です。右上の「？」から端末内の診断情報を確認できます。
+iPad第9世代の実機での性能・安定性は未検証です。
 広告・課金・アナリティクス・個人情報の入力や送信はありません。

@@ -21,7 +21,7 @@ export default defineConfig({
       name: "chromium-tablet",
       use: {
         ...devices["Desktop Chrome"],
-        viewport: { width: 1024, height: 768 },
+        viewport: { width: 1080, height: 810 },
         deviceScaleFactor: 2,
         hasTouch: true,
         launchOptions: {
@@ -35,7 +35,12 @@ export default defineConfig({
     },
     {
       name: "webkit-tablet",
-      use: { ...devices["iPad (gen 7)"], defaultBrowserType: "webkit" },
+      use: {
+        ...devices["iPad (gen 7)"],
+        viewport: { width: 1080, height: 810 },
+        deviceScaleFactor: 2,
+        defaultBrowserType: "webkit",
+      },
     },
   ],
 });

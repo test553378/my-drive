@@ -10,6 +10,7 @@ import {
   LAP,
   center,
   slope,
+  WHEEL_RADIUS,
 } from "../driving.js";
 
 function run(state, seconds, rivals = createRivals(), dt = 1 / 60) {
@@ -95,7 +96,7 @@ test("wheel travel follows distance, does not reverse or jump when turbo expires
   s.phase = "race";
   s.v = 20;
   advance(s, [], 0.05);
-  const expected = (s.z / 0.57) % (Math.PI * 2);
+  const expected = (s.z / WHEEL_RADIUS) % (Math.PI * 2);
   assert.ok(Math.abs(s.wheelAngle - expected) < 1e-10);
 });
 test("simulation remains comparable at 30 and 60 frames per second", () => {
