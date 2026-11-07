@@ -48,17 +48,42 @@ test("real controls hit an obstacle, show a flattened tyre and automatically rep
     .poll(async () => Math.max(...(await read(page)).flatVisual))
     .toBeGreaterThan(0.6);
   await page.screenshot({ path: test.info().outputPath("puncture.png") });
+  // Observe every rendered repair frame; post-repair polling may already see
+  // the normal automatic acceleration, especially on faster WebKit runners.
+  await page.evaluate(() => {
+    window.__repairObservation = { samples: [], complete: false };
+    const observe = () => {
+      const r = window.raceDiagnostics.read().runtime,
+        o = window.__repairObservation;
+      if (r.repairTimer > 0)
+        o.samples.push({
+          distance: r.distance,
+          speed: r.speed,
+          timer: r.repairTimer,
+        });
+      else if (o.samples.length) {
+        o.complete = true;
+        return;
+      }
+      requestAnimationFrame(observe);
+    };
+    requestAnimationFrame(observe);
+  });
   await expect
     .poll(async () => (await read(page)).repairTimer, { timeout: 65000 })
     .toBeGreaterThan(0);
-  const before = (await read(page)).distance;
   await page.screenshot({ path: test.info().outputPath("repair.png") });
   await expect
-    .poll(async () => (await read(page)).flatMask.some(Boolean), {
-      timeout: 10000,
-    })
-    .toBe(false);
-  expect((await read(page)).distance).toBeLessThan(before + 3);
+    .poll(
+      async () => page.evaluate(() => window.__repairObservation.complete),
+      { timeout: 10000 },
+    )
+    .toBe(true);
+  const samples = await page.evaluate(() => window.__repairObservation.samples);
+  expect(samples.length).toBeGreaterThan(3);
+  expect(samples.every((s) => s.speed === 0)).toBe(true);
+  expect(new Set(samples.map((s) => s.distance)).size).toBe(1);
+  expect((await read(page)).flatMask.some(Boolean)).toBe(false);
   await expect(page.locator("#condition")).not.toBeVisible();
   expect(errors).toEqual([]);
 });
