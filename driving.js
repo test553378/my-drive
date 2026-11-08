@@ -1,32 +1,60 @@
-// Pure driving simulation: metres, seconds, radians. No browser or storage access.
+import { DAMAGE } from "./race-config.js";
+import {
+  initCondition,
+  hasPuncture,
+  tickCondition,
+  applyImpact,
+  repairArea,
+  inPit,
+  enterRepair,
+} from "./damage.js";
+import { createObstacles } from "./hazards.js";
+import {
+  createPedestrians,
+  tickPedestrians,
+  contactPedestrian,
+  pedestrianStop,
+} from "./pedestrians.js";
+import { sweptContact } from "./collisions.js";
+import { raceRank } from "./race-metrics.js";
+// Pure simulation: longitudinal route distance, metres, seconds and radians.
 import { normalizeParts } from "./garage.js";
-export const LAP = 1400;
-export const TOTAL = LAP * 2;
-export const ROAD = 9.7;
-export const EDGE = ROAD - 1.75;
-export const TAU = Math.PI * 2;
-export const WHEEL_RADIUS = 0.43;
+import { vehicle } from "./vehicle-config.js";
+import { getTrack, trackPose } from "./tracks.js";
+export const LAP = 1400,
+  TOTAL = LAP * 2,
+  ROAD = 9.7,
+  EDGE = ROAD - 1.75,
+  TAU = Math.PI * 2,
+  WHEEL_RADIUS = 0.43;
 export const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
-export function center(z) {
-  return (
-    15 * Math.sin((z * TAU) / LAP) +
-    7.8 * Math.sin((z * TAU * 2) / LAP + 0.45) +
-    4.6 * Math.sin((z * TAU * 3) / LAP + 0.9)
-  );
+export const center = (z) => trackPose("C01", z).x;
+export const slope = (z) => {
+  const p = trackPose("C01", z);
+  return p.tx / (p.tz || 1e-6);
+};
+export const laneWorldX = (z, offset) => trackPose("C01", z, offset).x;
+export function createRivals(model = 0) {
+  const top = vehicle(model).top;
+  return [125, 87, 51, 20].map((z, i) => ({
+    z,
+    v: top * [0.85, 0.87, 0.84, 0.82][i],
+    speed: 0,
+    l: [-3.4, 3.1, -4.3, 4.4][i],
+    c: [1, 2, 3, 1][i],
+    wheelAngle: 0,
+  }));
 }
-export const slope = (z) => (center(z + 1) - center(z - 1)) / 2;
-// With the chase camera looking along +Z, world -X is screen right.
-export const laneWorldX = (z, rightOffset) => center(z) - rightOffset;
-export function createRivals() {
-  return [
-    { z: 125, v: 37.4, l: -3.4, c: 1, wheelAngle: 0 },
-    { z: 87, v: 38.3, l: 3.1, c: 2, wheelAngle: 0 },
-    { z: 51, v: 37, l: -4.3, c: 3, wheelAngle: 0 },
-    { z: 20, v: 36.2, l: 4.4, c: 1, wheelAngle: 0 },
-  ];
-}
-export function createRace(color = 0, model = 0, parts = {}) {
-  return {
+export function createRace(
+  color = 0,
+  model = 0,
+  parts = {},
+  courseId = "C01",
+  seed = 12345,
+) {
+  const track = getTrack(courseId),
+    p = trackPose(track, 0);
+  const s = {
     phase: "menu",
     z: 0,
     offset: 0,
@@ -34,6 +62,7 @@ export function createRace(color = 0, model = 0, parts = {}) {
     steerL: false,
     steerR: false,
     steerV: 0,
+    motionSteer: 0,
     boost: 0,
     charge: 100,
     time: 0,
@@ -42,79 +71,279 @@ export function createRace(color = 0, model = 0, parts = {}) {
     color,
     model,
     parts: normalizeParts(parts),
+    courseId: track.id,
+    brake: false,
+    siren: false,
+    fallTimer: 0,
     prev: 0,
     roll: 0,
     pitch: 0,
-    camX: center(0),
-    camZ: 0,
+    camX: p.x,
+    camZ: p.z,
     camH: 3.45,
+    cameraOffset: 0,
     hit: -20,
     count: 3.2,
     wheelAngle: 0,
     bounce: 0,
+    checkpointsPassed: 0,
+    nextCheckpoint: track.length / 8,
+    outTime: 0,
+    recoverTimer: 0,
   };
+  initCondition(s);
+  s.seed = seed;
+  s.obstacles = createObstacles(track.id, seed);
+  s.pedestrians = createPedestrians(track.id, seed);
+  return s;
 }
-export function activateBoost(state) {
-  if (state.phase !== "race" || state.charge < 60 || state.boost > 0)
+export function activateBoost(s) {
+  if (
+    s.phase !== "race" ||
+    s.charge < 60 ||
+    s.boost > 0 ||
+    s.brake ||
+    hasPuncture(s) ||
+    s.repairTimer > 0 ||
+    s.stopTimer > 0 ||
+    s.fallTimer > 0
+  )
     return false;
-  state.charge = 0;
-  state.boost = 2.55;
+  s.charge = 0;
+  s.boost = 2.55;
   return true;
 }
-export function advance(state, rivals, seconds) {
-  const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, 0.05);
-  if (state.phase === "countdown") {
-    state.count -= dt;
-    if (state.count <= -0.26) state.phase = "race";
+function progress(s, track, travel) {
+  const previous = s.z,
+    next = Math.min(previous + travel, track.length * 2),
+    interval = track.length / track.checkpointCount;
+  if (previous > s.nextCheckpoint + 3) {
+    s.z = Math.max(0, s.nextCheckpoint - 0.2);
+    s.offset = 0;
+    s.v *= 0.5;
+    return "recovered";
+  }
+  s.z = next;
+  while (
+    s.nextCheckpoint <= next + 0.00001 &&
+    s.nextCheckpoint >= previous - 0.00001
+  ) {
+    if (
+      Math.abs(s.offset) > track.halfWidth + 0.5 &&
+      !inPit(track, s.nextCheckpoint, s.offset)
+    ) {
+      s.z = s.nextCheckpoint - 0.2;
+      s.offset = 0;
+      s.v *= 0.5;
+      return "recovered";
+    }
+    s.checkpointsPassed++;
+    s.nextCheckpoint += interval;
+  }
+  return null;
+}
+export function advance(s, rivals, seconds) {
+  const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, 0.05),
+    track = getTrack(s.courseId),
+    spec = vehicle(s.model);
+  if (s.phase === "countdown") {
+    s.count -= dt;
+    if (s.count <= -0.26) s.phase = "race";
     return null;
   }
-  if (state.phase !== "race") return null;
-  state.time += dt;
-  state.boost = Math.max(0, state.boost - dt);
-  state.charge = Math.min(100, state.charge + dt * 12);
-  const dir = Number(state.steerR) - Number(state.steerL);
-  const previousSpeed = state.v;
-  const targetSpeed = 44 + (state.boost > 0 ? 18 : 0);
-  state.v += (targetSpeed - state.v) * (1 - Math.exp(-dt * 1.05));
-  const travel = Math.min(state.v * dt, TOTAL - state.z);
-  state.z += travel;
-  state.wheelAngle = (state.wheelAngle + travel / WHEEL_RADIUS) % TAU;
-  // Assistance follows the road automatically. Releasing both arrows recentres gently.
-  const targetSteer = dir * (3.2 + state.v * 0.075);
-  state.steerV += (targetSteer - state.steerV) * (1 - Math.exp(-dt * 6));
-  state.offset = clamp(state.offset + state.steerV * dt, -EDGE, EDGE);
-  if (!dir) state.offset *= Math.exp(-dt * 0.85);
-  state.roll += (-state.steerV * 0.013 - state.roll) * (1 - Math.exp(-dt * 7));
-  const acceleration = dt > 0 ? (state.v - previousSpeed) / dt : 0;
-  state.pitch +=
-    (clamp(-acceleration * 0.0025, -0.06, 0.045) - state.pitch) *
-    (1 - Math.exp(-dt * 7));
-  state.bounce = Math.sin(state.z * 0.85) * Math.min(0.018, state.v * 0.0004);
-  let event = null;
-  for (const rival of rivals) {
-    const distance = rival.v * dt;
-    rival.z += distance;
-    rival.wheelAngle = (rival.wheelAngle + distance / WHEEL_RADIUS) % TAU;
+  if (s.phase !== "race") return null;
+  const previousDistance = s.z,
+    previousOffset = s.offset;
+  s.time += dt;
+  s.boost = Math.max(0, s.boost - dt);
+  s.charge = Math.min(100, s.charge + dt * 12);
+  s.recoverTimer = Math.max(0, s.recoverTimer - dt);
+  let event = tickCondition(s, dt);
+  event = tickPedestrians(s, dt) || event;
+  if (spec.kind === "bike" && Math.abs(s.roll) > 0.65 && s.fallTimer <= 0)
+    s.fallTimer = 0.9;
+  let fallen = s.fallTimer > 0;
+  if (fallen) {
+    s.fallTimer = Math.max(0, s.fallTimer - dt);
+    s.roll *= Math.exp(-dt * 5);
+    if (s.fallTimer === 0) {
+      s.roll = 0;
+      fallen = false;
+      event = "bike-recovered";
+    }
+  }
+  const forced = s.stopTimer > 0 || s.repairTimer > 0 || fallen;
+  const p = trackPose(track, s.z),
+    dir = Number(s.steerR) - Number(s.steerL),
+    previousSpeed = s.v,
+    punctured = hasPuncture(s),
+    pit = repairArea(track, s.z);
+  if (forced) {
+    s.v = 0;
+    s.steerV = 0;
+    s.motionSteer = 0;
+    if (s.repairTimer > 0) s.wheelAngle = (s.wheelAngle + dt * 3) % TAU;
+  } else {
+    const pavedPit = inPit(track, s.z, s.offset),
+      offroad = Math.abs(s.offset) > track.halfWidth - 0.5 && !pavedPit;
+    let target =
+      spec.top * (1 - clamp(p.grade, -0.15, 0.25) * 0.55) +
+      (s.boost > 0 ? 18 : 0);
+    if (punctured) target = Math.min(target, spec.top * DAMAGE.topFactor);
+    if (offroad) target *= 0.55;
+    if (s.brake) target = 0;
+    if (s.brake) s.v = Math.max(0, s.v - spec.brake * dt);
+    else
+      s.v +=
+        (target - s.v) *
+        (1 - Math.exp(-dt * spec.accel * (punctured ? DAMAGE.accelFactor : 1)));
+    const safeSpeed = Math.sqrt(7 / Math.max(0.001, Math.abs(p.curvature))),
+      excess =
+        track.difficulty === 1 ? 0 : Math.max(0, (s.v - safeSpeed) / spec.top);
+    const targetSteer =
+      dir *
+      spec.turn *
+      (0.5 + (s.v / spec.top) * 0.5) *
+      (punctured ? DAMAGE.handlingFactor : 1);
+    s.steerV += (targetSteer - s.steerV) * (1 - Math.exp(-dt * 6));
+    s.offset +=
+      (s.steerV +
+        Math.sign(p.curvature) * excess * 3.2 +
+        (punctured ? s.damageSide * DAMAGE.drift : 0)) *
+      dt *
+      Math.min(1, s.v / 6);
+    const guide =
+      punctured && s.pitAssist && pit && pit.delta < DAMAGE.repairLead;
+    if (!dir && !guide) s.offset *= Math.exp(-dt * 0.85 * Math.min(1, s.v / 3));
+    if (!dir && guide && s.v > 0) {
+      const inside = Math.min(EDGE, track.halfWidth - 1.6),
+        mix = clamp((40 - pit.delta) / 30, 0, 1),
+        goal = inside + (pit.offset - inside) * mix;
+      s.offset += clamp(
+        (goal - s.offset) * (1 - Math.exp(-dt * 2.6)),
+        -spec.turn * dt * 1.1,
+        spec.turn * dt * 1.1,
+      );
+    }
+    if (s.pitExit && !dir && s.v > 0) {
+      s.offset *= Math.exp(-dt * 3);
+      if (Math.abs(s.offset) < 0.5) s.pitExit = false;
+    }
+    const expanded =
+      (punctured && pit && pit.delta < 45 && pit.delta > -26) ||
+      pavedPit ||
+      s.pitExit ||
+      s.repairTimer > 0;
+    const limit =
+      track.difficulty === 1 && !expanded ? EDGE : track.halfWidth + 4.5;
+    s.offset = clamp(s.offset, -limit, limit);
+    s.outTime =
+      Math.abs(s.offset) > track.halfWidth + 1 &&
+      !inPit(track, s.z, s.offset) &&
+      !s.pitExit
+        ? s.outTime + dt
+        : 0;
+    if (s.outTime > 0.85) {
+      s.offset = 0;
+      s.v *= 0.5;
+      s.outTime = 0;
+      s.recoverTimer = 0.6;
+      event = "recovered";
+    }
+    const factor = clamp(1 + p.curvature * s.offset, 0.8, 1.25),
+      travel = Math.min((s.v * dt) / factor, track.length * 2 - s.z);
+    event = progress(s, track, travel) || event;
+    s.wheelAngle = (s.wheelAngle + (travel * factor) / spec.radius) % TAU;
+    s.motionSteer = dt
+      ? clamp((s.offset - previousOffset) / dt, -spec.turn, spec.turn)
+      : 0;
+    s.roll += (-s.motionSteer * 0.013 - s.roll) * (1 - Math.exp(-dt * 7));
+    const acceleration = dt > 0 ? (s.v - previousSpeed) / dt : 0;
+    s.pitch +=
+      (clamp(-acceleration * 0.0025, -0.06, 0.045) - s.pitch) *
+      (1 - Math.exp(-dt * 7));
+    s.bounce = Math.sin(s.z * 0.85) * Math.min(0.018, s.v * 0.0004);
+    for (const object of s.obstacles) {
+      if (object.hit) continue;
+      const contact = sweptContact(
+        previousDistance,
+        s.z,
+        s.offset,
+        s.model,
+        object,
+      );
+      if (contact) {
+        object.hit = true;
+        const impact = s.v * contact.strength * object.severity;
+        s.v *= 0.8;
+        event = applyImpact(s, object, impact);
+        s.hit = s.time;
+      }
+    }
+    event = contactPedestrian(s, previousDistance) || event;
+    if (enterRepair(s, track)) event = "repair-start";
+  }
+  for (const r of rivals) {
+    if (r.finishTime !== undefined) {
+      r.speed = 0;
+      continue;
+    }
+    const rp = trackPose(track, r.z),
+      curveLimit =
+        track.difficulty === 1
+          ? 1
+          : clamp(
+              Math.sqrt(8 / Math.max(0.001, Math.abs(rp.curvature))) / spec.top,
+              0.65,
+              1,
+            );
+    r.speed = pedestrianStop(track, r.z, s.pedestrians)
+      ? 0
+      : (r.v || spec.top * 0.85) * curveLimit;
+    for (const o of s.obstacles)
+      if (
+        o.distance - r.z > 5 &&
+        o.distance - r.z < 55 &&
+        Math.abs(r.l - o.offset) < 2
+      )
+        r.l = o.offset > 0 ? -3.2 : 3.2;
+    const distance = r.speed * dt;
+    r.z += distance;
+    r.wheelAngle = (r.wheelAngle + distance / WHEEL_RADIUS) % TAU;
+    if (r.z >= track.length * 2) {
+      r.z = track.length * 2;
+      r.finishTime = s.time;
+    }
+    const gap =
+      ((((r.z - s.z + track.length / 2) % track.length) + track.length) %
+        track.length) -
+      track.length / 2;
     if (
-      Math.abs(rival.z - state.z) < 3.6 &&
-      Math.abs(rival.l - state.offset) < 2.45 &&
-      state.time - state.hit > 2
+      !forced &&
+      Math.abs(gap) < (spec.length + 4.86) * 0.4 &&
+      Math.abs(r.l - s.offset) < spec.width / 2 + 1.05 &&
+      s.time - s.hit > 2 &&
+      r.finishTime === undefined
     ) {
-      state.hit = state.time;
-      state.v *= 0.8;
-      state.offset = clamp(
-        state.offset + (state.offset > rival.l ? 0.4 : -0.4),
-        -EDGE,
-        EDGE,
+      s.hit = s.time;
+      s.v *= 0.8;
+      s.offset = clamp(
+        s.offset + (s.offset > r.l ? 0.4 : -0.4),
+        -track.halfWidth - 4,
+        track.halfWidth + 4,
       );
       event = "contact";
     }
   }
-  state.lap = Math.min(2, 1 + Math.floor(state.z / LAP));
-  state.rank = 1 + rivals.filter((r) => r.z > state.z).length;
-  if (state.z >= TOTAL) {
-    state.phase = "finish";
-    state.steerL = state.steerR = false;
+  s.lap = Math.min(2, 1 + Math.floor(s.z / track.length));
+  s.rank = raceRank(s, rivals);
+  if (
+    s.z >= track.length * 2 &&
+    s.checkpointsPassed >= track.checkpointCount * 2
+  ) {
+    s.phase = "finish";
+    s.steerL = s.steerR = false;
+    s.rank = raceRank(s, rivals);
     return "finish";
   }
   return event;

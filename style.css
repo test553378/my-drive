@@ -21,7 +21,7 @@ body {
     "Hiragino Kaku Gothic ProN",
     "Yu Gothic",
     sans-serif;
-  touch-action: none;
+  touch-action: manipulation;
   overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
@@ -790,7 +790,7 @@ body {
   justify-content: center;
   background: #08111ce8;
   padding: 12px;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 .diagnostics.hidden {
   display: none;
@@ -802,7 +802,7 @@ body {
   align-items: stretch;
   max-height: 95vh;
   overflow: auto;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 .diagnostics h2,
 .diagnostics p {
@@ -825,7 +825,7 @@ body {
   padding: 10px;
   user-select: text;
   -webkit-user-select: text;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 .diagnostic-actions {
   display: flex;
@@ -863,7 +863,7 @@ body {
 }
 .modal,
 .panel {
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   overscroll-behavior: contain;
 }
 .models {
@@ -1018,7 +1018,7 @@ body {
   overflow-y: auto;
   min-height: 0;
   pointer-events: auto;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   border-left: 1px solid #ffffff1c;
 }
 .garage-options fieldset {
@@ -1369,5 +1369,384 @@ body {
   .garage-footer {
     padding-top: 10px;
     padding-bottom: 10px;
+  }
+}
+/* Suppress tap-to-zoom on game surfaces without globally disabling pinch/OS zoom. */
+button,
+.ui,
+.garage-header,
+.garage-footer {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+}
+#world,
+.steer,
+.boost,
+#garage-preview,
+.driving-actions {
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+.garage-options,
+.diagnostics .panel {
+  touch-action: pan-y pinch-zoom;
+}
+.diagnostics textarea {
+  touch-action: manipulation;
+  -webkit-touch-callout: default;
+}
+.garage-options .models {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+.garage-options .models button {
+  min-width: 0;
+  min-height: 72px;
+  padding: 5px 3px;
+}
+.garage-options .models svg {
+  width: 52px;
+  height: 22px;
+}
+.garage-options .models span {
+  font-size: 10px;
+}
+.garage-options .models small {
+  font-size: 8px;
+  letter-spacing: 0.03em;
+}
+.vehicle-performance {
+  font-size: 10px;
+  color: #b8ccde;
+  line-height: 1.7;
+  margin: 7px 0 0;
+}
+.driving-actions {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  pointer-events: auto;
+  touch-action: none;
+}
+.brake,
+.siren {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  border: 2px solid #ffffffb0;
+  color: white;
+  border-radius: 18px;
+  min-width: 94px;
+  height: 94px;
+  touch-action: none;
+  font: 800 27px system-ui;
+  background: linear-gradient(145deg, #bb364c, #72283b);
+  box-shadow: 0 6px 14px #07121c60;
+  cursor: pointer;
+}
+.brake span,
+.siren span {
+  font-size: 13px;
+}
+.brake.is-down {
+  background: #e94b58;
+  transform: translateY(3px);
+}
+.siren {
+  background: #263e64;
+  min-width: 76px;
+  font-size: 25px;
+  height: 76px;
+}
+.siren[aria-pressed="true"] {
+  background: #a33f57;
+}
+.siren[hidden] {
+  display: none;
+}
+@media (max-width: 690px) {
+  .driving-actions {
+    gap: 6px;
+  }
+  .brake {
+    min-width: 64px;
+    width: 17vw;
+    height: 72px;
+  }
+  .brake span,
+  .siren span {
+    font-size: 10px;
+  }
+  .boost {
+    width: 17vw;
+    min-width: 64px;
+  }
+  .siren {
+    min-width: 50px;
+    width: 13vw;
+    height: 62px;
+    font-size: 20px;
+  }
+  .steer {
+    width: 20vw;
+  }
+  .controls {
+    gap: 6px;
+  }
+  .garage-options .models {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.garage:not(.paused) #garage-return {
+  display: none;
+}
+.garage-tabs {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+.garage-tabs button {
+  flex: 1;
+  border: 1px solid #677e95;
+  border-radius: 9px;
+  padding: 10px;
+  color: #bfd2e5;
+  background: #ffffff08;
+  font: 700 12px system-ui;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+.garage-tabs button[aria-selected="true"] {
+  background: #ac563d55;
+  border-color: #ffb18b;
+  color: white;
+}
+#vehicle-options[hidden],
+#course-options[hidden] {
+  display: none;
+}
+#course-options h2 {
+  font-size: 16px;
+  margin: 0 0 12px;
+}
+#course-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.course-choice {
+  min-height: 165px;
+  border-radius: 13px;
+  border: 1px solid #607890;
+  background: #ffffff06;
+  color: #e1edf9;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  font: 700 13px system-ui;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.course-choice svg {
+  width: 95px;
+  height: 95px;
+}
+.course-choice path {
+  fill: none;
+  stroke: #9bd6d5;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.course-choice span {
+  font-size: 11px;
+  color: #a4bed5;
+}
+.course-choice[aria-pressed="true"] {
+  border: 2px solid #ffb18b;
+  background: #a4593f30;
+}
+.selected-course {
+  font-size: 12px;
+  color: #ffdbab;
+  font-weight: 700;
+  margin: 0 0 5px;
+}
+.mini-map {
+  position: absolute;
+  top: 102px;
+  left: max(14px, env(safe-area-inset-left));
+  width: 135px;
+  background: #102132c9;
+  border: 1px solid #8aa4b45c;
+  border-radius: 12px;
+  padding: 7px;
+  color: white;
+  text-align: center;
+}
+.mini-map svg {
+  display: block;
+  width: 110px;
+  height: 95px;
+  margin: auto;
+}
+.mini-map path {
+  fill: none;
+  stroke: #c4d9e2;
+  stroke-width: 4;
+}
+.mini-map circle {
+  fill: #fb7854;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.mini-map span {
+  font-size: 9px;
+  display: block;
+  margin-top: 3px;
+}
+@media (max-width: 690px) {
+  .mini-map {
+    top: 80px;
+    width: 92px;
+    left: 8px;
+    padding: 4px;
+  }
+  .mini-map svg {
+    width: 80px;
+    height: 70px;
+  }
+  .mini-map span {
+    font-size: 8px;
+  }
+  .selected-course {
+    font-size: 10px;
+  }
+}
+.event-hud {
+  position: absolute;
+  right: max(14px, env(safe-area-inset-right));
+  top: 103px;
+  width: 166px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.penalty-badge,
+.condition-badge {
+  background: #132639d9;
+  border: 1px solid #89a7bc66;
+  border-radius: 12px;
+  padding: 8px 10px;
+  color: #d7e6ee;
+  font-size: 12px;
+  text-align: center;
+}
+.condition-badge {
+  border-color: #f3be72;
+  color: #ffe1a7;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  pointer-events: auto;
+}
+.condition-badge strong {
+  font-size: 15px;
+}
+.condition-badge button {
+  background: #277457;
+  color: white;
+  border: 1px solid #9ce2b6;
+  border-radius: 8px;
+  min-height: 40px;
+  font: 700 13px system-ui;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+.repair-meter {
+  height: 6px;
+  background: #132d2a;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.repair-meter div {
+  height: 100%;
+  width: 0;
+  background: #a9ecc0;
+}
+.pedestrian-warning {
+  position: absolute;
+  top: 112px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff0bff2;
+  color: #493b20;
+  border: 2px solid #f7c650;
+  border-radius: 16px;
+  padding: 9px 16px;
+  text-align: center;
+}
+.pedestrian-warning b {
+  font-size: 33px;
+}
+.pedestrian-warning span {
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 800;
+}
+.forced-stop {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 18px;
+  border-radius: 17px;
+  background: #fff2c5f0;
+  color: #42351f;
+  font-size: 22px;
+  font-weight: 800;
+}
+.condition-badge[hidden],
+.pedestrian-warning[hidden],
+.forced-stop[hidden] {
+  display: none;
+}
+@media (max-width: 690px) {
+  .event-hud {
+    top: 80px;
+    right: 8px;
+    width: 132px;
+  }
+  .penalty-badge {
+    font-size: 10px;
+    padding: 6px;
+  }
+  .condition-badge {
+    padding: 6px;
+  }
+  .condition-badge strong {
+    font-size: 12px;
+  }
+  .pedestrian-warning {
+    top: 180px;
+    gap: 6px;
+    padding: 6px 10px;
+  }
+  .pedestrian-warning b {
+    font-size: 25px;
+  }
+  .pedestrian-warning span {
+    font-size: 11px;
+  }
+  .forced-stop {
+    font-size: 17px;
   }
 }

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta
       name="viewport"
-      content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover,user-scalable=no"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
     <meta name="theme-color" content="#0d1725" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -53,17 +53,52 @@
         <div><strong id="speed">000</strong><span>km/h</span></div>
         <div class="speed-hint">AUTO ACCELERATION</div>
       </div>
+      <div class="mini-map">
+        <svg viewBox="0 0 100 100" aria-label="コース全体図と自車位置">
+          <path id="mini-map-path" />
+          <g id="mini-map-pits"></g>
+          <circle id="mini-map-car" r="4" /></svg
+        ><span id="race-course"></span>
+      </div>
+      <div class="event-hud">
+        <div class="penalty-badge">
+          ⏱ <span id="penalty-time">+0びょう</span>
+        </div>
+        <div class="condition-badge" id="condition" hidden>
+          <strong id="condition-text"></strong
+          ><button id="pit-guide">🔧 しゅうりへ</button>
+          <div class="repair-meter"><div id="repair-progress"></div></div>
+        </div>
+      </div>
+      <div id="pedestrian-warning" class="pedestrian-warning" hidden>
+        <b>🚶 ✋</b><span>ひとが わたるよ<br />ブレーキで とまろう</span>
+      </div>
+      <div id="forced-stop" class="forced-stop" hidden></div>
       <div class="countdown" id="countdown">3</div>
       <div id="toast" class="toast" aria-live="polite"></div>
       <div class="controls">
         <button class="steer left" id="left" aria-label="ひだり">
           ◀<span>ひだり</span>
         </button>
-        <div class="boost-zone">
-          <button class="boost" id="boost" aria-label="ブースト">
-            ⚡<br />ターボ
-            <div class="meter" id="boostmeter"></div></button
-          ><span class="boost-txt">はやく はしる</span>
+        <div class="driving-actions">
+          <button class="brake" id="brake" aria-label="ブレーキ">
+            ✋<span>ブレーキ</span>
+          </button>
+          <div class="boost-zone">
+            <button class="boost" id="boost" aria-label="ブースト">
+              ⚡<br />ターボ
+              <div class="meter" id="boostmeter"></div></button
+            ><span class="boost-txt">はやく はしる</span>
+          </div>
+          <button
+            class="siren"
+            id="siren"
+            aria-label="サイレンの切り替え"
+            aria-pressed="false"
+            hidden
+          >
+            🚨<span>サイレン</span>
+          </button>
         </div>
         <button class="steer right" id="right" aria-label="みぎ">
           ▶<span>みぎ</span>
@@ -103,156 +138,198 @@
             <div class="preview-hint">↔ ゆびで くるまを まわしてみよう</div>
           </section>
           <div class="garage-options">
-            <fieldset class="vehicle-group">
-              <legend>① くるまを えらぼう</legend>
-              <div class="models" role="group" aria-label="くるまの かたち">
-                <button
-                  class="vehicle-choice"
-                  data-model="0"
-                  aria-pressed="true"
-                >
-                  <svg viewBox="0 0 96 36" aria-hidden="true">
-                    <path
-                      d="M8 24 14 16 31 13 43 5 66 7 77 15 90 19 91 28H8Z"
-                    />
-                    <circle cx="26" cy="28" r="7" />
-                    <circle cx="75" cy="28" r="7" /></svg
-                  ><span>スーパーカー</span><small>NOVA R</small>
-                </button>
-                <button
-                  class="vehicle-choice"
-                  data-model="1"
-                  aria-pressed="false"
-                >
-                  <svg viewBox="0 0 96 36" aria-hidden="true">
-                    <path
-                      d="M8 24 14 16 31 13 43 5 66 7 77 15 90 19 91 28H8Z"
-                    />
-                    <circle cx="26" cy="28" r="7" />
-                    <circle cx="75" cy="28" r="7" /></svg
-                  ><span>スポーツカー</span><small>AERO S</small>
-                </button>
-              </div>
-            </fieldset>
-            <div class="paint-group">
-              <span class="colorlabel" id="choose">すきな いろに しよう</span>
-              <div class="colors" role="group" aria-label="くるまの いろ">
-                <button
-                  aria-label="あか"
-                  aria-pressed="true"
-                  class="swatch selected"
-                  style="background: #e42d29"
-                  data-color="0"
-                ></button
-                ><button
-                  aria-label="あお"
-                  aria-pressed="false"
-                  class="swatch"
-                  style="background: #1b66ca"
-                  data-color="1"
-                ></button
-                ><button
-                  aria-label="きいろ"
-                  aria-pressed="false"
-                  class="swatch"
-                  style="background: #f8b419"
-                  data-color="2"
-                ></button
-                ><button
-                  aria-label="みどり"
-                  aria-pressed="false"
-                  class="swatch"
-                  style="background: #249672"
-                  data-color="3"
-                ></button>
-              </div>
+            <div class="garage-tabs" role="tablist">
+              <button role="tab" data-garage-tab="vehicle" aria-selected="true">
+                🚗 くるまと パーツ</button
+              ><button
+                role="tab"
+                data-garage-tab="course"
+                aria-selected="false"
+              >
+                🏁 コース
+              </button>
             </div>
-            <h2 class="parts-heading">② パーツを つけよう</h2>
-            <fieldset class="part-group">
-              <legend>タイヤ</legend>
-              <div class="part-choices">
-                <button
-                  type="button"
-                  class="part-choice"
-                  data-part="tyres"
-                  data-value="0"
-                  aria-pressed="true"
-                >
-                  <span class="part-icon icon-tyres-0" aria-hidden="true"></span
-                  >スポーツ</button
-                ><button
-                  type="button"
-                  class="part-choice"
-                  data-part="tyres"
-                  data-value="1"
-                  aria-pressed="false"
-                >
-                  <span class="part-icon icon-tyres-1" aria-hidden="true"></span
-                  >スリック
-                </button>
+            <div id="vehicle-options">
+              <fieldset class="vehicle-group">
+                <legend>① くるまを えらぼう</legend>
+                <div class="models" role="group" aria-label="くるまの かたち">
+                  <button
+                    class="vehicle-choice"
+                    data-model="0"
+                    aria-pressed="true"
+                  >
+                    <svg viewBox="0 0 96 36" aria-hidden="true">
+                      <path
+                        d="M8 24 14 16 31 13 43 5 66 7 77 15 90 19 91 28H8Z"
+                      />
+                      <circle cx="26" cy="28" r="7" />
+                      <circle cx="75" cy="28" r="7" /></svg
+                    ><span>スーパーカー</span><small>NOVA R</small>
+                  </button>
+                  <button
+                    class="vehicle-choice"
+                    data-model="1"
+                    aria-pressed="false"
+                  >
+                    <svg viewBox="0 0 96 36" aria-hidden="true">
+                      <path
+                        d="M8 24 14 16 31 13 43 5 66 7 77 15 90 19 91 28H8Z"
+                      />
+                      <circle cx="26" cy="28" r="7" />
+                      <circle cx="75" cy="28" r="7" /></svg
+                    ><span>スポーツカー</span><small>AERO S</small>
+                  </button>
+                </div>
+              </fieldset>
+              <div class="paint-group">
+                <span class="colorlabel" id="choose">すきな いろに しよう</span>
+                <div class="colors" role="group" aria-label="くるまの いろ">
+                  <button
+                    aria-label="あか"
+                    aria-pressed="true"
+                    class="swatch selected"
+                    style="background: #e42d29"
+                    data-color="0"
+                  ></button
+                  ><button
+                    aria-label="あお"
+                    aria-pressed="false"
+                    class="swatch"
+                    style="background: #1b66ca"
+                    data-color="1"
+                  ></button
+                  ><button
+                    aria-label="きいろ"
+                    aria-pressed="false"
+                    class="swatch"
+                    style="background: #f8b419"
+                    data-color="2"
+                  ></button
+                  ><button
+                    aria-label="みどり"
+                    aria-pressed="false"
+                    class="swatch"
+                    style="background: #249672"
+                    data-color="3"
+                  ></button>
+                </div>
               </div>
-            </fieldset>
-            <fieldset class="part-group">
-              <legend>ボディ</legend>
-              <div class="part-choices">
-                <button
-                  type="button"
-                  class="part-choice"
-                  data-part="body"
-                  data-value="0"
-                  aria-pressed="true"
-                >
-                  <span class="part-icon icon-body-0" aria-hidden="true"></span
-                  >スタンダード</button
-                ><button
-                  type="button"
-                  class="part-choice"
-                  data-part="body"
-                  data-value="1"
-                  aria-pressed="false"
-                >
-                  <span class="part-icon icon-body-1" aria-hidden="true"></span
-                  >ワイド
-                </button>
-              </div>
-            </fieldset>
-            <fieldset class="part-group">
-              <legend>エアロ</legend>
-              <div class="part-choices">
-                <button
-                  type="button"
-                  class="part-choice"
-                  data-part="aero"
-                  data-value="0"
-                  aria-pressed="false"
-                >
-                  <span class="part-icon icon-aero-0" aria-hidden="true"></span
-                  >なし</button
-                ><button
-                  type="button"
-                  class="part-choice"
-                  data-part="aero"
-                  data-value="1"
-                  aria-pressed="true"
-                >
-                  <span class="part-icon icon-aero-1" aria-hidden="true"></span
-                  >ストリート</button
-                ><button
-                  type="button"
-                  class="part-choice"
-                  data-part="aero"
-                  data-value="2"
-                  aria-pressed="false"
-                >
-                  <span class="part-icon icon-aero-2" aria-hidden="true"></span
-                  >レーシング
-                </button>
-              </div>
-            </fieldset>
+              <h2 class="parts-heading">② パーツを つけよう</h2>
+              <fieldset class="part-group">
+                <legend>タイヤ</legend>
+                <div class="part-choices">
+                  <button
+                    type="button"
+                    class="part-choice"
+                    data-part="tyres"
+                    data-value="0"
+                    aria-pressed="true"
+                  >
+                    <span
+                      class="part-icon icon-tyres-0"
+                      aria-hidden="true"
+                    ></span
+                    >スポーツ</button
+                  ><button
+                    type="button"
+                    class="part-choice"
+                    data-part="tyres"
+                    data-value="1"
+                    aria-pressed="false"
+                  >
+                    <span
+                      class="part-icon icon-tyres-1"
+                      aria-hidden="true"
+                    ></span
+                    >スリック
+                  </button>
+                </div>
+              </fieldset>
+              <fieldset class="part-group">
+                <legend>ボディ</legend>
+                <div class="part-choices">
+                  <button
+                    type="button"
+                    class="part-choice"
+                    data-part="body"
+                    data-value="0"
+                    aria-pressed="true"
+                  >
+                    <span
+                      class="part-icon icon-body-0"
+                      aria-hidden="true"
+                    ></span
+                    >スタンダード</button
+                  ><button
+                    type="button"
+                    class="part-choice"
+                    data-part="body"
+                    data-value="1"
+                    aria-pressed="false"
+                  >
+                    <span
+                      class="part-icon icon-body-1"
+                      aria-hidden="true"
+                    ></span
+                    >ワイド
+                  </button>
+                </div>
+              </fieldset>
+              <fieldset class="part-group">
+                <legend>エアロ</legend>
+                <div class="part-choices">
+                  <button
+                    type="button"
+                    class="part-choice"
+                    data-part="aero"
+                    data-value="0"
+                    aria-pressed="false"
+                  >
+                    <span
+                      class="part-icon icon-aero-0"
+                      aria-hidden="true"
+                    ></span
+                    >なし</button
+                  ><button
+                    type="button"
+                    class="part-choice"
+                    data-part="aero"
+                    data-value="1"
+                    aria-pressed="true"
+                  >
+                    <span
+                      class="part-icon icon-aero-1"
+                      aria-hidden="true"
+                    ></span
+                    >ストリート</button
+                  ><button
+                    type="button"
+                    class="part-choice"
+                    data-part="aero"
+                    data-value="2"
+                    aria-pressed="false"
+                  >
+                    <span
+                      class="part-icon icon-aero-2"
+                      aria-hidden="true"
+                    ></span
+                    >レーシング
+                  </button>
+                </div>
+              </fieldset>
+            </div>
+            <div id="course-options" hidden>
+              <h2>コースを えらぼう</h2>
+              <div id="course-list"></div>
+              <p class="note">はじめは ★ の コースが おすすめ</p>
+            </div>
           </div>
         </div>
         <footer class="garage-footer">
           <div>
+            <p id="selected-course" class="selected-course">
+              🏁 はじめて サーキット ・ 2しゅう
+            </p>
             <p class="instructions" id="instructions">
               ◀ ▶ で まがる ／ はなすと まんなかへ
             </p>
@@ -260,7 +337,8 @@
               どの パーツでも かんたんに はしれるよ
             </p>
           </div>
-          <button class="start" id="start">▶ レース スタート！</button>
+          <button class="secondary" id="garage-return">⌂ ガレージへ</button
+          ><button class="start" id="start">▶ レース スタート！</button>
         </footer>
       </div>
     </div>

@@ -1,3 +1,19 @@
+import { createActors } from "./actors.js";
+import { hasPuncture, repairArea } from "./damage.js";
+import { DAMAGE } from "./race-config.js";
+import { raceRank } from "./race-metrics.js";
+import {
+  TRACKS,
+  getTrack,
+  trackPose,
+  cameraPose,
+  overviewCamera,
+  mapPath,
+  mapPoint,
+} from "./tracks.js";
+import { buildTrackScene } from "./world.js";
+import { vehicle, wheelLayout } from "./vehicle-config.js";
+import { createInput, installGameGestures } from "./input.js";
 import { VEHICLES, defaultSetup, copySetup, setupSummary } from "./garage.js";
 import { buildBody, buildWheel, buildAero } from "./vehicles.js";
 import { perspective, lookAt, mul, projectPoint } from "./camera.js";
@@ -86,7 +102,7 @@ function boot() {
   const vs = `
 attribute vec3 aPos,aNorm,aColor; attribute float aMat;
 uniform mat4 uVP; uniform vec3 uShift,uEye;
-uniform float uYaw,uSpin,uRoll,uPitch;
+uniform float uYaw,uSpin,uRoll,uPitch; uniform vec3 uScale;
 varying mediump vec3 vWorld,vNorm,vColor;
 varying mediump vec2 vSurface;
 varying mediump float vMat,vFog;
@@ -94,11 +110,11 @@ void main(){
   float sn=sin(uSpin),cs=cos(uSpin),pr=cos(uPitch),ps=sin(uPitch);
   float rr=cos(uRoll),rs=sin(uRoll),y=cos(uYaw),s=sin(uYaw);
   vec3 p=vec3(aPos.x,aPos.y*cs-aPos.z*sn,aPos.y*sn+aPos.z*cs);
-  p=vec3(p.x,p.y*pr-p.z*ps,p.y*ps+p.z*pr);
+  p*=uScale; p=vec3(p.x,p.y*pr-p.z*ps,p.y*ps+p.z*pr);
   p=vec3(p.x*rr-p.y*rs,p.x*rs+p.y*rr,p.z);
   p=vec3(y*p.x+s*p.z,p.y,-s*p.x+y*p.z)+uShift;
   vec3 n=vec3(aNorm.x,aNorm.y*cs-aNorm.z*sn,aNorm.y*sn+aNorm.z*cs);
-  n=vec3(n.x,n.y*pr-n.z*ps,n.y*ps+n.z*pr);
+  n/=uScale; n=vec3(n.x,n.y*pr-n.z*ps,n.y*ps+n.z*pr);
   n=vec3(n.x*rr-n.y*rs,n.x*rs+n.y*rr,n.z);
   vNorm=normalize(vec3(y*n.x+s*n.z,n.y,-s*n.x+y*n.z));
   vWorld=p-uEye; vColor=aColor; vMat=aMat; vSurface=p.xz*.15;
@@ -240,6 +256,7 @@ void main(){
       roll: gl.getUniformLocation(prog, "uRoll"),
       pitch: gl.getUniformLocation(prog, "uPitch"),
       eye: gl.getUniformLocation(prog, "uEye"),
+      scale: gl.getUniformLocation(prog, "uScale"),
       studio: gl.getUniformLocation(prog, "uStudio"),
     };
     skLoc = {
@@ -406,6 +423,12 @@ void main(){
       }
       return this;
     }
+    dispose() {
+      if (this.buffer) gl.deleteBuffer(this.buffer);
+      meshes.delete(this);
+      this.vertices = null;
+      this.buffer = null;
+    }
     upload() {
       this.buffer = gl.createBuffer();
       if (!this.buffer) throw Error("Mesh buffer allocation failed");
@@ -435,6 +458,7 @@ void main(){
     spin = 0,
     roll = 0,
     pitch = 0,
+    scale = [1, 1, 1],
   ) {
     if (!m.count) return;
     gl.bindBuffer(gl.ARRAY_BUFFER, m.buffer);
@@ -448,6 +472,7 @@ void main(){
     gl.enableVertexAttribArray(loc.m);
     gl.vertexAttribPointer(loc.m, 1, gl.FLOAT, false, stride, 36);
     gl.uniform3f(loc.shift, x, y, z);
+    gl.uniform3fv(loc.scale, scale);
     gl.uniform1f(loc.yaw, yaw);
     gl.uniform1f(loc.spin, spin);
     gl.uniform1f(loc.roll, roll);
@@ -456,260 +481,14 @@ void main(){
     drawCalls++;
     vertices += m.count;
   }
-  function noise(n) {
-    let f = Math.sin(n * 127.12 + 24.03) * 46411.35;
-    return f - Math.floor(f);
-  }
-  D.event("mesh-build");
-  const CHUNK = 100,
-    chunks = Array.from({ length: LAP / CHUNK }, (_, i) => ({
-      start: i * CHUNK,
-      road: new Mesh(),
-      deco: new Mesh(),
-    }));
-  let road = chunks[0].road,
-    deco = chunks[0].deco;
-  for (let z = 0; z < LAP; z += 5) {
-    road = chunks[Math.floor(z / CHUNK)].road;
-    const zz = z + 5,
-      x = center(z),
-      xx = center(zz);
-    let grass = C(73, 110, 65);
-    road.quad(
-      [x - 245, -0.12, z],
-      [xx - 245, -0.12, zz],
-      [xx + 245, -0.12, zz],
-      [x + 245, -0.12, z],
-      C(
-        81 + Math.floor(noise(z) * 10),
-        119 + Math.floor(noise(z + 3) * 13),
-        73,
-      ),
-      5,
-    );
-    road.quad(
-      [x - ROAD - 3.1, -0.03, z],
-      [xx - ROAD - 3.1, -0.03, zz],
-      [xx + ROAD + 3.1, -0.03, zz],
-      [x + ROAD + 3.1, -0.03, z],
-      C(114, 113, 101),
-      1,
-    );
-    road.quad(
-      [x - ROAD, 0, z],
-      [xx - ROAD, 0, zz],
-      [xx + ROAD, 0, zz],
-      [x + ROAD, 0, z],
-      C(49, 54, 59),
-      1,
-    );
-    for (const s of [-1, 1]) {
-      const a = x + s * (ROAD - 0.24),
-        b = xx + s * (ROAD - 0.24);
-      road.quad(
-        [a - s * 0.075, 0.029, z],
-        [b - s * 0.075, 0.029, zz],
-        [b + s * 0.075, 0.029, zz],
-        [a + s * 0.075, 0.029, z],
-        C(234, 234, 221),
-        0,
-      );
-      let edge = x + s * (ROAD + 0.66),
-        edge2 = xx + s * (ROAD + 0.66),
-        stripe =
-          Math.floor(z / 8) % 2 === 0 ? C(238, 240, 227) : C(204, 42, 40);
-      road.quad(
-        [edge - s * 0.66, 0.032, z],
-        [edge2 - s * 0.66, 0.032, zz],
-        [edge2 + s * 0.66, 0.032, zz],
-        [edge + s * 0.66, 0.032, z],
-        stripe,
-      );
+  let scene = null,
+    garageTab = "vehicle";
+  function ensureScene() {
+    if (!scene || scene.track.id !== S.courseId) {
+      scene?.dispose();
+      D.event("course-build", S.courseId);
+      scene = buildTrackScene(Mesh, getTrack(S.courseId));
     }
-    if (z % 40 === 0) {
-      for (const l of [-3.28, 3.28]) {
-        const b1 = x + l,
-          b2 = center(z + 14) + l;
-        road.quad(
-          [b1 - 0.07, 0.025, z],
-          [b2 - 0.07, 0.025, z + 14],
-          [b2 + 0.07, 0.025, z + 14],
-          [b1 + 0.07, 0.025, z],
-          C(220, 225, 221),
-        );
-      }
-    }
-    if (z % 85 === 0)
-      for (const l of [-2.5, 2.0]) {
-        let v = x + l;
-        road.quad(
-          [v - 0.16, 0.03, z],
-          [v - 0.26, 0.03, z + 19],
-          [v - 0.18, 0.03, z + 19],
-          [v - 0.08, 0.03, z],
-          C(30, 31, 33),
-        );
-      }
-  }
-  road = chunks[0].road;
-  // Starting grid and checkered finish line.
-  for (let row = 0; row < 4; row++)
-    for (let col = 0; col < 12; col++) {
-      let z = row * 1.35,
-        x = center(z) - 9.0 + col * 1.5;
-      road.quad(
-        [x, 0.046, z],
-        [x, 0.046, z + 1.35],
-        [x + 1.5, 0.046, z + 1.35],
-        [x + 1.5, 0.046, z],
-        (row + col) % 2 ? C(34, 36, 40) : C(244, 246, 245),
-      );
-    }
-  // Guardrails, fences, grandstand, pit buildings and scenery.
-  for (let z = 0; z < LAP; z += 12) {
-    deco = chunks[Math.floor(z / CHUNK)].deco;
-    for (const s of [-1, 1]) {
-      const x = center(z) + s * 14.6,
-        x2 = center(z + 12) + s * 14.6;
-      deco.box(x, 0.8, z, 0.22, 1.5, 0.25, C(151, 160, 169));
-      for (let y of [0.86, 1.33])
-        deco.quad(
-          [x, y, z],
-          [x2, y, z + 12],
-          [x2, y + 0.18, z + 12],
-          [x, y + 0.18, z],
-          C(194, 205, 210),
-        );
-      if (z % 48 === 0) {
-        deco.box(x, 2.48, z, 0.13, 2.1, 0.13, C(162, 176, 175));
-        deco.quad(
-          [x, 1.55, z],
-          [x2, 1.55, z + 12],
-          [x2, 3.2, z + 12],
-          [x, 3.2, z],
-          C(124, 152, 152),
-        );
-      }
-    }
-  }
-  for (let i = 0; i < 78; i++) {
-    const z = 9 + i * 17.6,
-      which = noise(i * 7 + 3);
-    deco = chunks[Math.floor(z / CHUNK)].deco;
-    for (let s of [-1, 1]) {
-      if (noise(i * 12 + s * 8) < 0.22) continue;
-      const x = center(z) + s * (26 + noise(i * 21 + s * 33) * 70),
-        height = 4.0 + noise(i * 13 + 17) * 5;
-      deco.cylinder(x, 0, z, 0.41, height * 0.66, C(100, 77, 61), 0, 7);
-      let foliage = [C(56, 95, 64), C(65, 111, 69), C(85, 121, 70)][
-        Math.floor(noise(i * 43 + s) * 3)
-      ];
-      deco.sphere(
-        x,
-        height * 0.68,
-        z,
-        2.4 + which,
-        2.65 + which,
-        2.5,
-        foliage,
-        0,
-        9,
-        6,
-      );
-      deco.sphere(
-        x - 1.2,
-        height * 0.51,
-        z - 0.6,
-        1.7,
-        2,
-        1.8,
-        shade(foliage, 0.85),
-        0,
-        8,
-        4,
-      );
-    }
-  }
-  for (let i = 0; i < 32; i++) {
-    const z = 32 + i * 43,
-      sign = i % 2 ? 1 : -1;
-    deco = chunks[Math.floor(z / CHUNK)].deco;
-    let x = center(z) + sign * (105 + noise(i + 77) * 70),
-      h = 20 + noise(i * 8) * 29;
-    deco.box(
-      x,
-      h * 0.5 - 3,
-      z,
-      14 + noise(i + 3) * 12,
-      h,
-      13,
-      C(
-        168 + Math.floor(noise(i) * 22),
-        178 + Math.floor(noise(i + 10) * 14),
-        172,
-      ),
-      0,
-    );
-    deco.box(x, h + 0.9 - 3, z, 16, 1.8, 15, C(118, 139, 148));
-    for (let fl = 1; fl < 4; fl++)
-      for (let w = -1; w <= 1; w++)
-        deco.box(
-          x + w * 4,
-          (h * fl) / 5,
-          z + (sign > 0 ? 7 : -7),
-          2,
-          1.6,
-          0.11,
-          C(70, 113, 147),
-          3,
-        );
-  }
-  // Grandstand at one long straight section.
-  for (let z = 410; z < 700; z += 12) {
-    deco = chunks[Math.floor(z / CHUNK)].deco;
-    let x = center(z) - 29;
-    deco.box(x, 2.4, z, 22, 2.6, 12, C(104, 109, 112));
-    for (let r = 0; r < 6; r++) {
-      deco.box(x - r * 0.98, 3.8 + r * 0.5, z, 12, 0.5, 11, C(96, 113, 126));
-      for (let j = 0; j < 4; j++) {
-        let col = [
-          C(219, 85, 77),
-          C(245, 202, 104),
-          C(67, 127, 179),
-          C(224, 223, 204),
-        ][(j + r + Math.floor(z)) % 4];
-        deco.box(
-          x - 3.5 + j * 2,
-          4.3 + r * 0.5,
-          z + (j % 2 ? 2 : -2),
-          0.63,
-          0.7,
-          0.8,
-          col,
-        );
-      }
-    }
-  }
-  // Trackside advertising walls and timing gantries, stylized original graphics.
-  for (const z of [150, 790, 1180]) {
-    deco = chunks[Math.floor(z / CHUNK)].deco;
-    let x = center(z);
-    for (let s of [-1, 1])
-      deco.box(x + s * 13.0, 4.6, z, 0.65, 9.2, 0.8, C(100, 114, 125));
-    deco.box(x, 8.55, z, 27, 3.1, 1.2, C(23, 39, 54), 2);
-    deco.box(x, 8.6, z + 0.64, 16, 1.4, 0.15, C(232, 77, 50), 3);
-  }
-  for (let i = 0; i < 35; i++) {
-    let z = i * 39 + 12;
-    deco = chunks[Math.floor(z / CHUNK)].deco;
-    let x = center(z) + (i % 2 ? 21 : -21);
-    deco.cylinder(x, 0, z, 0.15, 7.2, C(150, 166, 178), 0, 6);
-    deco.box(x - (i % 2 ? 1 : -1), 7.0, z, 2.3, 0.35, 0.4, C(190, 199, 207));
-    deco.box(x - (i % 2 ? 2.05 : -2.05), 6.7, z, 0.5, 0.2, 0.8, LAMP, 3);
-  }
-  for (const chunk of chunks) {
-    chunk.road.done();
-    chunk.deco.done();
   }
   const bodyCache = new Map(),
     aeroCache = new Map();
@@ -729,6 +508,20 @@ void main(){
       );
     if (!aeroCache.has(aeroKey))
       aeroCache.set(aeroKey, buildAero(Mesh, model, parts.body, parts.aero));
+    if (bodyCache.size > 20) {
+      const key = bodyCache.keys().next().value;
+      if (key !== bodyKey) {
+        bodyCache.get(key)?.dispose();
+        bodyCache.delete(key);
+      }
+    }
+    if (aeroCache.size > 12) {
+      const key = aeroCache.keys().next().value;
+      if (key !== aeroKey) {
+        aeroCache.get(key)?.dispose();
+        aeroCache.delete(key);
+      }
+    }
     return {
       body: bodyCache.get(bodyKey),
       aero: aeroCache.get(aeroKey),
@@ -802,8 +595,30 @@ void main(){
     }
     gl.viewport(0, 0, w, h);
   }
-  const setups = [defaultSetup(0), defaultSetup(1)];
+  const icon = (label) =>
+    `<svg viewBox="0 0 96 36" aria-hidden="true"><path d="M8 24 14 16 31 13 43 5 66 7 77 15 90 19 91 28H8Z"/><circle cx="26" cy="28" r="7"/><circle cx="75" cy="28" r="7"/></svg>`;
+  document.querySelector(".models").innerHTML = VEHICLES.map(
+    (v, i) =>
+      `<button class="vehicle-choice" data-model="${i}" aria-pressed="${i === 0}">${icon(v.label)}<span>${v.label}</span><small>${v.name}</small></button>`,
+  ).join("");
+  const performanceLabel = document.createElement("p");
+  performanceLabel.id = "vehicle-performance";
+  performanceLabel.className = "vehicle-performance";
+  document.querySelector(".vehicle-group").append(performanceLabel);
+  const lampMeshes = [
+    new Mesh().box(0, 0, 0, 0.26, 0.12, 0.3, C(241, 30, 27), 4).done(),
+    new Mesh().box(0, 0, 0, 0.26, 0.12, 0.3, C(35, 104, 246), 4).done(),
+    new Mesh().box(0, 0, 0, 0.26, 0.12, 0.3, C(43, 53, 66), 0).done(),
+  ];
+  $("course-list").innerHTML = TRACKS.map(
+    (t) =>
+      `<button class="course-choice" data-course="${t.id}" aria-pressed="${t.id === "C01"}"><svg viewBox="0 0 100 100" aria-hidden="true"><path d="${mapPath(t)}"/></svg><strong>${t.icon} ${t.name}</strong><span>${"★".repeat(t.difficulty)} ・ ${t.length}m</span></button>`,
+  ).join("");
+  const actors = createActors(Mesh);
+  const setups = VEHICLES.map((_, i) => defaultSetup(i));
   const S = createRace(setups[0].color, 0, setups[0].parts);
+  const input = createInput(S);
+  installGameGestures(document.body);
   let garageYaw = -0.24,
     previewDrag = null,
     lastView = null;
@@ -812,8 +627,15 @@ void main(){
   const canCustomize = () => inGarage() && graphicsReady;
   function refreshGarage() {
     const vehicle = VEHICLES[S.model];
-    $("garage-car-name").textContent = vehicle.name;
-    $("garage-car-type").textContent = vehicle.label;
+    $("garage-car-name").textContent =
+      garageTab === "course" ? getTrack(S.courseId).label : vehicle.name;
+    $("garage-car-type").textContent =
+      garageTab === "course"
+        ? `むずかしさ ${"★".repeat(getTrack(S.courseId).difficulty)}`
+        : vehicle.label;
+    $("vehicle-performance").textContent =
+      `はやさ ${Math.round(vehicle.top * 3.6)} km/h ・ かそく ${"●".repeat(Math.round(vehicle.accel * 3))} ・ まがりやすさ ${"●".repeat(Math.round(vehicle.turn / 2))}`;
+    $("siren").hidden = !vehicle.emergency;
     canvas.setAttribute(
       "aria-label",
       inGarage() ? `${vehicle.name}の3Dプレビュー` : "3Dスーパーカーレース",
@@ -837,7 +659,19 @@ void main(){
       "aria-label",
       `${setupSummary(S)}。左右にドラッグして回転`,
     );
+    $("selected-course").textContent =
+      `${getTrack(S.courseId).icon} ${getTrack(S.courseId).name} ・ 2しゅう`;
+    for (const button of document.querySelectorAll("[data-course]"))
+      button.setAttribute(
+        "aria-pressed",
+        String(button.dataset.course === S.courseId),
+      );
+    document.querySelector(".preview-hint").textContent =
+      garageTab === "course"
+        ? "↔ ゆびで コースを まわしてみよう"
+        : "↔ ゆびで くるまを まわしてみよう";
     vehicleMeshes(S);
+    if (garageTab === "course") ensureScene();
   }
   function rememberSetup() {
     setups[S.model] = copySetup(S);
@@ -851,12 +685,39 @@ void main(){
     speed: Number(S.v.toFixed(1)),
     steering: [S.steerL, S.steerR],
     model: VEHICLES[S.model].name,
+    courseId: S.courseId,
+    courseLength: getTrack(S.courseId).length,
+    checkpoints: S.checkpointsPassed,
+    sceneCourse: scene?.track.id,
+    kind: vehicle(S.model).kind,
+    wheelCount: wheelLayout(S.model).length,
+    siren: S.siren,
+    brake: S.brake,
     parts: { ...S.parts },
     screen: screenPosition,
     garage: inGarage(),
     garageYaw: Number(garageYaw.toFixed(2)),
     modelCacheSize: bodyCache.size,
     color: S.color,
+    flatMask: [...S.flatMask],
+    flatVisual: [...S.flatVisual],
+    repairTimer: S.repairTimer,
+    repairProgress: S.repairProgress,
+    penaltyTime: S.penaltyTime,
+    stopTimer: S.stopTimer,
+    fallTimer: S.fallTimer,
+    obstaclePreview: S.obstacles.map((o) => ({
+      distance: o.distance,
+      offset: o.offset,
+      type: o.type,
+      hit: o.hit,
+    })),
+    pedestrians: S.pedestrians.map((p) => ({
+      distance: p.distance,
+      offset: p.offset,
+      phase: p.phase,
+      hit: p.hit,
+    })),
     frames,
     drawCalls,
     vertices,
@@ -874,6 +735,7 @@ void main(){
   let audio = null,
     engine = null,
     mute = true;
+  let sirenAudio = null;
   function initAudio() {
     if (mute) return;
     try {
@@ -894,11 +756,20 @@ void main(){
         g.connect(audio.destination);
         o.start();
         engine = { o, f, g };
+        const sirenOsc = audio.createOscillator(),
+          sirenGain = audio.createGain();
+        sirenOsc.type = "sine";
+        sirenGain.gain.value = 0;
+        sirenOsc.connect(sirenGain);
+        sirenGain.connect(audio.destination);
+        sirenOsc.start();
+        sirenAudio = { o: sirenOsc, g: sirenGain };
       }
       audio.resume().catch((e) => D.event("audio-unavailable", e.message));
     } catch (e) {
       D.event("audio-unavailable", e.message);
       mute = true;
+      let sirenAudio = null;
       $("sound").textContent = "🔇";
     }
   }
@@ -919,8 +790,37 @@ void main(){
       o.stop(t + 0.21);
     } catch (_) {}
   }
+  function hiss() {
+    if (!audio || mute) return;
+    try {
+      const length = Math.floor(audio.sampleRate * 0.32),
+        buffer = audio.createBuffer(1, length, audio.sampleRate),
+        data = buffer.getChannelData(0);
+      for (let i = 0; i < length; i++)
+        data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+      const source = audio.createBufferSource(),
+        gain = audio.createGain();
+      source.buffer = buffer;
+      gain.gain.value = 0.035;
+      source.connect(gain);
+      gain.connect(audio.destination);
+      source.start();
+    } catch {}
+  }
   function applyAudio() {
     if (!engine) return;
+    const alarm =
+      !mute && S.siren && vehicle(S.model).emergency && S.phase === "race";
+    sirenAudio.g.gain.setTargetAtTime(
+      alarm ? 0.025 : 0,
+      audio.currentTime,
+      0.1,
+    );
+    sirenAudio.o.frequency.setTargetAtTime(
+      650 + 230 * Math.sin(S.time * 4.5),
+      audio.currentTime,
+      0.08,
+    );
     const active = !mute && (S.phase === "race" || S.phase === "countdown");
     engine.o.frequency.setTargetAtTime(
       55 + S.v * 2.7 + (S.boost > 0 ? 35 : 0),
@@ -931,15 +831,50 @@ void main(){
     engine.g.gain.setTargetAtTime(active ? 0.019 : 0, audio.currentTime, 0.15);
   }
   function metric() {
-    S.lap = Math.min(2, 1 + Math.floor(S.z / LAP));
-    S.rank = 1 + ai.filter((r) => r.z > S.z).length;
+    const track = getTrack(S.courseId);
+    S.lap = Math.min(2, 1 + Math.floor(S.z / track.length));
+    S.rank = raceRank(S, ai);
     $("lap").textContent = `${S.lap} / 2`;
     $("rank").textContent = `${S.rank} / 5`;
-    $("time").textContent = S.time.toFixed(1) + "s";
-    $("speed").textContent = String(Math.round(S.v * 3.1)).padStart(3, "0");
-    $("progressbar").style.width = Math.min(100, (100 * S.z) / TOTAL) + "%";
+    $("time").textContent = (S.time + S.penaltyTime).toFixed(1) + "s";
+    $("speed").textContent = String(Math.round(S.v * 3.6)).padStart(3, "0");
+    $("progressbar").style.width =
+      Math.min(100, (100 * S.z) / (track.length * 2)) + "%";
     $("boostmeter").style.width = S.charge + "%";
-    $("boost").disabled = S.charge < 60 || S.phase !== "race";
+    $("mini-map-path").setAttribute("d", mapPath(track));
+    $("mini-map-pits").innerHTML = track.repairFractions
+      .map((f) => {
+        const p = mapPoint(track, f * track.length);
+        return `<rect x="${p.x - 2.2}" y="${p.y - 2.2}" width="4.4" height="4.4" fill="#75e8a2"/>`;
+      })
+      .join("");
+    const point = mapPoint(track, S.z);
+    $("mini-map-car").setAttribute("cx", point.x);
+    $("mini-map-car").setAttribute("cy", point.y);
+    $("race-course").textContent = track.label;
+    $("boost").disabled =
+      S.charge < 60 ||
+      S.phase !== "race" ||
+      hasPuncture(S) ||
+      S.brake ||
+      S.repairTimer > 0 ||
+      S.stopTimer > 0 ||
+      S.fallTimer > 0;
+    $("penalty-time").textContent = `+${S.penaltyTime}びょう`;
+    const flat = hasPuncture(S);
+    $("condition").hidden = !flat && S.repairTimer === 0;
+    $("condition-text").textContent =
+      S.repairTimer > 0
+        ? `🔧 しゅうり ${Math.ceil(S.repairTimer)}`
+        : `🛞 パンク ${S.flatMask.filter(Boolean).length}`;
+    $("repair-progress").style.width = `${S.repairProgress * 100}%`;
+    const warning = S.pedestrians.some(
+      (p) => p.phase === "warning" || p.phase === "crossing",
+    );
+    $("pedestrian-warning").hidden = !warning;
+    $("forced-stop").hidden = S.stopTimer <= 0;
+    $("forced-stop").textContent =
+      `✋ あんぜん かくにん ${Math.ceil(S.stopTimer)}`;
   }
   let toastEnd = 0;
   function toast(msg) {
@@ -948,16 +883,29 @@ void main(){
     toastEnd = performance.now() + 1250;
   }
   function clearControls() {
-    S.steerL = S.steerR = false;
+    input.clear();
+    previewDrag = null;
     for (const id of ["left", "right"]) $(id).classList.remove("is-down");
   }
   function reset() {
     const { color, model, parts } = copySetup(S);
-    Object.assign(S, createRace(color, model, parts), { phase: "countdown" });
+    const courseId = S.courseId;
+    Object.assign(
+      S,
+      createRace(
+        color,
+        model,
+        parts,
+        courseId,
+        Math.floor(Math.random() * 0x7fffffff),
+      ),
+      { phase: "countdown" },
+    );
+    ensureScene();
     document.body.classList.remove("in-garage");
     $("modal").classList.remove("paused");
     canvas.setAttribute("aria-label", "3Dスーパーカーレース");
-    ai.splice(0, ai.length, ...createRivals());
+    ai.splice(0, ai.length, ...createRivals(S.model));
     $("modal").classList.add("hidden");
     $("countdown").classList.add("visible");
     $("pause").textContent = "Ⅱ";
@@ -975,10 +923,13 @@ void main(){
     $("title").innerHTML =
       S.rank === 1 ? "🏆 <em>WINNER!</em>" : "🏁 <em>FINISH!</em>";
     $("subtitle").textContent =
-      `${S.rank}い / 5だい　 ${S.time.toFixed(1)}びょう`;
+      `${S.rank}い / 5だい　 ${(S.time + S.penaltyTime).toFixed(1)}びょう（ペナルティ +${S.penaltyTime}）`;
     $("choose").textContent = "すきな くるまを えらんでね";
     $("start").textContent = "↻ もういちど レース";
-    $("instructions").textContent = "さいごまで はしれたね！";
+    $("instructions").textContent =
+      S.penaltyTime > 0
+        ? "つぎは ひとに みちを ゆずろう！"
+        : "さいごまで はしれたね！";
     beep(770);
   }
   let pausedPhase = "race";
@@ -1021,6 +972,31 @@ void main(){
         toast("だいじょうぶ！ はしろう！");
         beep(230);
       }
+      if (event === "recovered") toast("コースに もどったよ！");
+      if (event === "bike-recovered") toast("だいじょうぶ！ はしろう！");
+      if (event === "puncture") {
+        toast("🛞 パンク！ みどりの しゅうりへ");
+        hiss();
+      }
+      if (event === "repair-start") {
+        clearControls();
+        toast("🔧 しゅうり するよ！");
+        beep(540);
+      }
+      if (event === "repaired") {
+        toast("✨ なおったよ！");
+        beep(880);
+      }
+      if (event === "crossing-warning") beep(460);
+      if (event === "safe-crossing") {
+        toast("👍 あんぜんに とおれたね");
+        beep(740);
+      }
+      if (event === "pedestrian-contact") {
+        clearControls();
+        toast("✋ とまって あんぜんを かくにん");
+        beep(240);
+      }
       if (event === "finish") finish();
     }
     if (S.phase === "countdown")
@@ -1040,48 +1016,85 @@ void main(){
     pitch = 0,
     steer = 0,
     detailed = true,
+    roadPitch = 0,
   ) {
     const geometry = vehicleMeshes(setup, detailed),
       spec = VEHICLES[setup.model];
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(false);
-    draw(shadow, x + 0.14, 0.018, z - 0.15, yaw);
+    draw(shadow, x + 0.14, y - 0.007, z - 0.15, yaw, 0, 0, roadPitch, [
+      spec.width / 2.1,
+      1,
+      spec.length / 4.86,
+    ]);
     gl.depthMask(true);
     gl.disable(gl.BLEND);
     draw(geometry.body, x, y, z, yaw, 0, roll, pitch);
     if (geometry.aero) draw(geometry.aero, x, y, z, yaw, 0, roll, pitch);
-    for (const wheelZ of spec.wheelZ)
+    const radiusScale = spec.radius / 0.43;
+    for (const [wheelIndex, wheel] of wheelLayout(
+      setup.model,
+      setup.parts.body,
+    ).entries()) {
+      const flatten =
+          setup === S && !inGarage() ? S.flatVisual[wheelIndex] || 0 : 0,
+        vertical = 1 - flatten * 0.45;
+      const wx = x + Math.cos(yaw) * wheel.x + Math.sin(yaw) * wheel.z,
+        wz = z - Math.sin(yaw) * wheel.x + Math.cos(yaw) * wheel.z;
+      draw(
+        geometry.wheel,
+        wx,
+        y + spec.radius * vertical + 0.01 - Math.sin(roadPitch) * wheel.z,
+        wz,
+        yaw + (wheel.z > 0 ? steer : 0),
+        wheelAngle,
+        0,
+        0,
+        [radiusScale, radiusScale * vertical, radiusScale],
+      );
+    }
+    if (spec.emergency) {
       for (const side of [-1, 1]) {
-        const xx = side * (setup.parts.body ? 1.075 : 0.965),
-          zz = wheelZ;
-        const wx = x + Math.cos(yaw) * xx + Math.sin(yaw) * zz,
-          wz = z - Math.sin(yaw) * xx + Math.cos(yaw) * zz;
+        const localX = side * 0.38,
+          localZ = spec.kind === "patrol" ? -0.1 : 0.35;
+        const wx = x + Math.cos(yaw) * localX + Math.sin(yaw) * localZ,
+          wz = z - Math.sin(yaw) * localX + Math.cos(yaw) * localZ;
+        const lit =
+          setup === S &&
+          S.phase === "race" &&
+          S.siren &&
+          (Math.floor(S.time * 5) + (side === 1 ? 1 : 0)) % 2 === 0;
         draw(
-          geometry.wheel,
+          lampMeshes[lit ? (side < 0 ? 0 : 1) : 2],
           wx,
-          y + 0.44,
+          y + spec.roof + 0.13,
           wz,
-          yaw + (wheelZ > 0 ? steer : 0),
-          wheelAngle,
+          yaw,
         );
       }
+    }
   }
-  function carAt(z, offset, col, wheelAngle, player) {
-    const x = laneWorldX(z, offset),
-      y =
-        0.025 +
-        (reducedMotion
-          ? 0
-          : player
-            ? S.bounce * 0.5
-            : 0.005 * Math.sin(z * 0.85));
-    const yaw = Math.atan(slope(z)) - (player ? S.steerV * 0.014 : 0);
-    if (player && lastView)
+
+  function carAt(distance, offset, col, wheelAngle, player) {
+    const track = getTrack(S.courseId),
+      p = trackPose(track, distance, offset);
+    const y =
+      p.y +
+      0.025 +
+      (reducedMotion
+        ? 0
+        : player
+          ? S.bounce * 0.5
+          : 0.005 * Math.sin(distance * 0.85));
+    const yaw = p.yaw - (player ? S.motionSteer * 0.014 : 0);
+    if (player && lastView) {
+      const c = trackPose(track, distance);
       screenPosition = {
-        player: projectPoint(lastView, [x, 0.6, z]).slice(0, 2),
-        laneCenter: projectPoint(lastView, [center(z), 0.6, z]).slice(0, 2),
+        player: projectPoint(lastView, [p.x, y + 0.6, p.z]).slice(0, 2),
+        laneCenter: projectPoint(lastView, [c.x, c.y + 0.6, c.z]).slice(0, 2),
       };
+    }
     const setup = player
       ? S
       : {
@@ -1091,16 +1104,93 @@ void main(){
         };
     drawVehicle(
       setup,
-      x,
+      p.x,
       y,
-      z,
+      p.z,
       yaw,
       wheelAngle,
-      player && !reducedMotion ? S.roll : 0,
-      player && !reducedMotion ? S.pitch : 0,
-      player ? -S.steerV * 0.035 : 0,
+      player && !reducedMotion
+        ? vehicle(S.model).kind === "bike"
+          ? S.fallTimer > 0
+            ? Math.sin(((0.9 - S.fallTimer) / 0.9) * Math.PI) * 1.0
+            : -S.roll * 2.1
+          : S.roll +
+            S.damageSide * 0.035 +
+            (hasPuncture(S) ? Math.sin(S.damageAge * 24) * 0.012 : 0)
+        : 0,
+      p.pitch + (player && !reducedMotion ? S.pitch : 0),
+      player ? -S.motionSteer * 0.035 : 0,
       player,
+      p.pitch,
     );
+  }
+  function drawEvents(pose) {
+    const track = getTrack(S.courseId),
+      visible = (p) => Math.hypot(p.x - pose.x, p.z - pose.z) < 250;
+    for (const object of S.obstacles) {
+      const p = trackPose(track, object.distance, object.offset);
+      if (visible(p))
+        draw(actors.obstacles[object.type], p.x, p.y + 0.02, p.z, p.yaw);
+    }
+    for (const [index, person] of S.pedestrians.entries()) {
+      if (!["warning", "crossing", "safe"].includes(person.phase)) continue;
+      if (person.phase === "safe" && S.z - person.distance > 40) continue;
+      const p = trackPose(track, person.distance, person.offset);
+      if (!visible(p)) continue;
+      const yaw = p.yaw + (person.side > 0 ? Math.PI / 2 : -Math.PI / 2),
+        walking = person.phase === "crossing",
+        swing = walking ? Math.sin(S.time * 7 + index) * 0.55 : 0;
+      const at = (x, y, z = 0) => [
+        p.x + Math.cos(yaw) * x + Math.sin(yaw) * z,
+        p.y + y,
+        p.z - Math.sin(yaw) * x + Math.cos(yaw) * z,
+      ];
+      draw(actors.shirts[index % 3], ...at(0, 0.94), yaw);
+      draw(actors.heads[index % 3], ...at(0, 1.46), yaw);
+      for (const side of [-1, 1]) {
+        draw(actors.leg, ...at(side * 0.12, 0.55), yaw, side * swing);
+        draw(actors.arm, ...at(side * 0.25, 1.18), yaw, -side * swing);
+      }
+      if (person.phase === "warning" && Math.floor(S.time * 3) % 2 === 0) {
+        const sign = trackPose(
+          track,
+          person.distance - 7,
+          track.halfWidth + 1.8,
+        );
+        draw(actors.warning, sign.x, sign.y + 3.3, sign.z);
+      }
+    }
+    for (const fraction of track.repairFractions) {
+      const p = trackPose(
+        track,
+        fraction * track.length,
+        track.halfWidth + 3.1,
+      );
+      if (visible(p))
+        draw(
+          actors.wrench,
+          p.x,
+          p.y + 0.04,
+          p.z,
+          p.yaw + (S.repairTimer > 0 ? S.time * 2 : 0),
+        );
+    }
+  }
+  function drawScene(pose, overview = false) {
+    ensureScene();
+    draw(scene.terrain);
+    for (const chunk of scene.chunks) {
+      const dx = chunk.center.x - pose.x,
+        dz = chunk.center.z - pose.z;
+      if (
+        !overview &&
+        (Math.hypot(dx, dz) > 480 ||
+          dx * pose.tx + dz * pose.tz < -chunk.radius - 15)
+      )
+        continue;
+      draw(chunk.road);
+      if (!overview) draw(chunk.deco);
+    }
   }
   function renderGarage() {
     const rect = $("garage-preview").getBoundingClientRect(),
@@ -1117,21 +1207,41 @@ void main(){
     drawSky(1);
     gl.useProgram(prog);
     gl.uniform1f(loc.studio, 1);
-    const eye = [6.2, 3.1, 8.5],
-      view = mul(
-        perspective(
-          ((vw / vh > 1.5 ? 28 : 38) * Math.PI) / 180,
-          vw / vh,
-          0.1,
-          110,
-        ),
-        lookAt(eye, [0, 0.65, 0]),
+    if (garageTab === "course") {
+      ensureScene();
+      const t = getTrack(S.courseId),
+        camera = overviewCamera(t, vw / vh, garageYaw),
+        eye = camera.eye;
+      const view = mul(
+        perspective((40 * Math.PI) / 180, vw / vh, 1, camera.far),
+        lookAt(eye, camera.aim),
       );
-    gl.uniformMatrix4fv(loc.vp, false, view);
-    gl.uniform3fv(loc.eye, eye);
-    draw(studioFloor);
-    draw(studioStage);
-    drawVehicle(S, 0, 0.025, 0, garageYaw);
+      gl.uniformMatrix4fv(loc.vp, false, view);
+      gl.uniform3fv(loc.eye, eye);
+      drawScene(trackPose(t, 0), true);
+    } else {
+      const spec = vehicle(S.model),
+        distanceScale = Math.max(1, spec.length / 4.86, spec.roof / 1.5);
+      const eye = [
+          6.2 * distanceScale,
+          3.1 * distanceScale,
+          8.5 * distanceScale,
+        ],
+        view = mul(
+          perspective(
+            ((vw / vh > 1.5 ? 28 : 38) * Math.PI) / 180,
+            vw / vh,
+            0.1,
+            110,
+          ),
+          lookAt(eye, [0, Math.max(0.65, spec.roof * 0.43), 0]),
+        );
+      gl.uniformMatrix4fv(loc.vp, false, view);
+      gl.uniform3fv(loc.eye, eye);
+      draw(studioFloor);
+      draw(studioStage, 0, 0, 0, 0, 0, 0, 0, [distanceScale, 1, distanceScale]);
+      drawVehicle(S, 0, 0.025, 0, garageYaw);
+    }
     gl.viewport(0, 0, WIDTH, HEIGHT);
   }
   function drawSky(studio = 0) {
@@ -1191,46 +1301,44 @@ void main(){
         drawSky();
         gl.clear(gl.DEPTH_BUFFER_BIT);
         gl.useProgram(prog);
-        const z = S.z,
-          x = laneWorldX(z, S.offset);
-        S.camX += (x - S.camX) * (1 - Math.exp(-dt * 3.9));
-        // Longitudinal lag would add speed/response metres to the chase distance.
-        // Speed itself is already smooth, so maintain a constant viewing distance.
-        S.camZ = z;
-        const targetH = S.boost > 0 && !reducedMotion ? 3.15 : 3.45;
+        const track = getTrack(S.courseId),
+          pose = trackPose(track, S.z, S.offset);
+        S.cameraOffset +=
+          (S.offset - S.cameraOffset) * (1 - Math.exp(-dt * 3.9));
+        const targetH = Math.max(
+          vehicle(S.model).roof + 2.1,
+          S.boost > 0 && !reducedMotion ? 3.15 : 3.45,
+        );
         S.camH += (targetH - S.camH) * (1 - Math.exp(-dt * 2.4));
-        const eye = [
-            S.camX + (reducedMotion ? 0 : S.roll),
+        const camera = cameraPose(
+            track,
+            S.z,
+            S.cameraOffset,
             S.camH,
-            S.camZ - 10.5,
-          ],
-          aim = [center(z + 38) * 0.64 + x * 0.36, 1.1, z + 34];
+            Math.max(10.5, vehicle(S.model).length * 2),
+          ),
+          eye = camera.eye;
         const view = mul(
           perspective(
             ((62 + (S.boost > 0 && !reducedMotion ? 3 : 0)) * Math.PI) / 180,
             WIDTH / HEIGHT,
             0.2,
-            435,
+            520,
           ),
-          lookAt(eye, aim),
+          lookAt(eye, camera.aim),
         );
         lastView = view;
         gl.uniform1f(loc.studio, 0);
         gl.uniformMatrix4fv(loc.vp, false, view);
-        gl.uniform3fv(loc.eye, new Float32Array(eye));
-        const step = Math.floor(z / LAP);
-        for (let i = step - 1; i <= step + 1; i++)
-          for (const chunk of chunks) {
-            const start = i * LAP + chunk.start;
-            // Scenery may extend 15m beyond its segment. Preserve it at the frustum edge.
-            if (start + CHUNK < z - 65 || start > z + 455) continue;
-            draw(chunk.road, 0, 0, i * LAP);
-            draw(chunk.deco, 0, 0, i * LAP);
-          }
-        for (const r of ai)
-          if (r.z > z - 35 && r.z < z + 240)
+        gl.uniform3fv(loc.eye, eye);
+        drawScene(pose);
+        drawEvents(pose);
+        for (const r of ai) {
+          const rp = trackPose(track, r.z, r.l);
+          if (Math.hypot(rp.x - pose.x, rp.z - pose.z) < 240)
             carAt(r.z, r.l, r.c, r.wheelAngle, false);
-        carAt(z, S.offset, S.color, S.wheelAngle, true);
+        }
+        carAt(S.z, S.offset, S.color, S.wheelAngle, true);
         if ($("toast").classList.contains("show") && timestamp > toastEnd)
           $("toast").classList.remove("show");
       }
@@ -1276,6 +1384,25 @@ void main(){
       S.parts[button.dataset.part] = Number(button.dataset.value);
       rememberSetup();
     });
+  function setGarageTab(tab) {
+    garageTab = tab;
+    $("vehicle-options").hidden = tab !== "vehicle";
+    $("course-options").hidden = tab !== "course";
+    for (const b of document.querySelectorAll("[data-garage-tab]"))
+      b.setAttribute("aria-selected", String(b.dataset.garageTab === tab));
+    refreshGarage();
+  }
+  for (const button of document.querySelectorAll("[data-garage-tab]"))
+    button.addEventListener("click", () =>
+      setGarageTab(button.dataset.garageTab),
+    );
+  for (const button of document.querySelectorAll("[data-course]"))
+    button.addEventListener("click", () => {
+      if (!canCustomize()) return;
+      S.courseId = button.dataset.course;
+      refreshGarage();
+    });
+
   const preview = $("garage-preview");
   preview.addEventListener("pointerdown", (e) => {
     if (!canCustomize()) return;
@@ -1308,28 +1435,36 @@ void main(){
     else reset();
   });
   $("pause").addEventListener("click", pause);
-  function control(id, field) {
-    let el = $(id),
-      down = (e) => {
-        e.preventDefault();
-        if (S.phase !== "race") return;
-        S[field] = true;
-        el.classList.add("is-down");
-        try {
-          el.setPointerCapture(e.pointerId);
-        } catch (_) {}
-      },
-      up = (e) => {
-        e.preventDefault();
-        S[field] = false;
-        el.classList.remove("is-down");
-      };
-    el.addEventListener("pointerdown", down);
-    for (let ev of ["pointerup", "pointercancel", "lostpointercapture"])
-      el.addEventListener(ev, up);
-  }
-  control("left", "steerL");
-  control("right", "steerR");
+  input.bind($("left"), "steerL");
+  input.bind($("right"), "steerR");
+  $("pit-guide").addEventListener("click", () => {
+    S.pitAssist = true;
+    toast("🔧 みどりの しゅうりへ いこう");
+  });
+  input.bind($("brake"), "brake");
+  $("siren").addEventListener("click", () => {
+    if (!vehicle(S.model).emergency) return;
+    S.siren = !S.siren;
+    $("siren").setAttribute("aria-pressed", String(S.siren));
+    initAudio();
+  });
+  $("garage-return").addEventListener("click", () => {
+    clearControls();
+    S.phase = "menu";
+    S.v = 0;
+    S.boost = 0;
+    S.siren = false;
+    S.prev = 0;
+    document.body.classList.add("in-garage");
+    $("modal").classList.remove("paused");
+    $("title").innerHTML = "ぼくの <em>GRAND RACE</em>";
+    $("kicker").textContent = "きみだけの マシンを つくろう";
+    $("subtitle").textContent = "くるまと パーツを えらんで、サーキットへ！";
+    $("start").textContent = "▶ レース スタート！";
+    refreshGarage();
+    metric();
+    applyAudio();
+  });
   function boost() {
     if (activateBoost(S)) {
       toast("⚡ ターボ！");
@@ -1348,23 +1483,27 @@ void main(){
   });
   addEventListener("keydown", (e) => {
     if (!$("diagnostics").classList.contains("hidden")) return;
-    if (["ArrowLeft", "ArrowRight", " ", "Escape"].includes(e.key)) {
+    if (
+      ["ArrowLeft", "ArrowRight", "ArrowDown", " ", "Escape"].includes(e.key)
+    ) {
       // Space/Enter on menu buttons retain normal keyboard activation.
       if (S.phase !== "race" && S.phase !== "countdown" && e.key !== "Escape")
         return;
       e.preventDefault();
       if (e.repeat && e.key === "Escape") return;
       if (S.phase === "race") {
-        if (e.key === "ArrowLeft") S.steerL = true;
-        if (e.key === "ArrowRight") S.steerR = true;
+        if (e.key === "ArrowLeft") input.key("steerL", true);
+        if (e.key === "ArrowRight") input.key("steerR", true);
+        if (e.key === "ArrowDown") input.key("brake", true);
         if (e.key === " ") boost();
       }
       if (e.key === "Escape") pause();
     }
   });
   addEventListener("keyup", (e) => {
-    if (e.key === "ArrowLeft") S.steerL = false;
-    if (e.key === "ArrowRight") S.steerR = false;
+    if (e.key === "ArrowLeft") input.key("steerL", false);
+    if (e.key === "ArrowRight") input.key("steerR", false);
+    if (e.key === "ArrowDown") input.key("brake", false);
   });
   function suspend() {
     clearControls();
