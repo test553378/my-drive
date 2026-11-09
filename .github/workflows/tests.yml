@@ -24,6 +24,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run build:graphics
+      - run: git diff --exit-code -- graphics-lab/app.bundle.js graphics-lab/asset-manifest.json
       - run: npm run check
       - run: npm test
       - run: npx playwright install --with-deps ${{ matrix.browser }}

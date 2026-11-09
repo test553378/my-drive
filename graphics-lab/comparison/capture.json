@@ -1,0 +1,27 @@
+{
+  "captureDate": "2026-11-09",
+  "environment": "Linux / Playwright Chromium 141 / SwiftShader, 1080x810 CSS px / DPR 2",
+  "before": {
+    "version": "6.0.0",
+    "model": "NOVA R",
+    "course": "C01",
+    "distance": 151,
+    "buffer": [
+      800,
+      600
+    ],
+    "quality": "automatically reduced to 480000 pixels"
+  },
+  "after": {
+    "version": "graphics-p2.1",
+    "model": "Car Concept, mobile GLB",
+    "course": "C01",
+    "distance": 150,
+    "buffer": [
+      800,
+      600
+    ],
+    "quality": "low, adaptive off"
+  },
+  "notes": "Real browser screenshots; no image generation or retouching. PNG captures converted to WebP. Both use 480000 rendering pixels; the UI and model differ. The prototype is stopped with the real brake control, not a full race."
+}
