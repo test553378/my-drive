@@ -215,14 +215,18 @@ test("a failed real texture request identifies the file and HTTP status without 
 test("a failed application script also produces a readable load error", async ({
   page,
 }) => {
-  await page.route("**/app.bundle.js", (route) =>
-    route.fulfill({ status: 503, body: "Unavailable" }),
-  );
+  let requests = 0;
+  await page.route("**/app.bundle.js", (route) => {
+    requests++;
+    return route.fulfill({ status: 503, body: "Unavailable" });
+  });
   await page.goto("graphics-lab/");
   await expect(page.locator("#failure")).toBeVisible();
   await expect(page.locator("#error-label")).toContainText(
     "script-load-failed: app.bundle.js",
   );
+  await page.locator("#retry").click();
+  await expect.poll(() => requests).toBe(2);
 });
 test("context restoration rebuilds HDR lighting and requires an explicit resume", async ({
   page,

@@ -140,6 +140,7 @@
           if (event.target?.tagName === "SCRIPT") {
             document.querySelector("#loading").hidden = true;
             document.querySelector("#failure-details").hidden = true;
+            document.querySelector("#retry").onclick = () => location.reload();
             document.querySelector("#failure").hidden = false;
             document.querySelector("#error-label").textContent =
               "script-load-failed: " + event.target.getAttribute("src");
