@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>素材とライセンス — GRAND RACE</title
+  ><style>
+    body {
+      font:
+        16px/1.9 system-ui,
+        sans-serif;
+      background: #17252a;
+      color: #eee6dc;
+      max-width: 850px;
+      margin: auto;
+      padding: 35px 24px;
+    }
+    a {
+      color: #f2b291;
+    }
+    h1 {
+      font-size: 28px;
+    }
+    h2 {
+      font-size: 21px;
+      margin-top: 35px;
+    }
+    small {
+      color: #c3ceca;
+    }
+    li {
+      margin: 10px 0;
+    }
+    code {
+      overflow-wrap: anywhere;
+    }</style
+  ><a href="./">← 画質試作へ</a>
+  <h1>素材とライセンス</h1>
+  <p>
+    このページは、外部GLBモデル1台と初級コース1つを使った画質確認用の試作です。既存ゲームの全車両への展開・操舵改修・AI強化は、この試作の評価後に行います。広告・課金・個人情報の収集はありません。
+  </p>
+  <h2>Car Concept — 車両モデル</h2>
+  <p>
+    © 2024 Eric Chadwick / Darmstadt Graphics Group GmbH。原型：Unity
+    Fan（CC0）。派生モデルの著作権ライセンス：<a
+      href="https://creativecommons.org/licenses/by/4.0/"
+      >CC BY 4.0</a
+    >。
+  </p>
+  <p>
+    <a
+      href="https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/CarConcept"
+      >公式配布元と制作解説</a
+    >
+    / <a href="CAR-SOURCE-LICENSE.md">配布元ライセンス記録</a>
+  </p>
+  <p>
+    変更：商標ロゴを使うナンバープレート・ステアリングエンブレムの部品を削除。Khronos
+    / 3D
+    Commerceを含む画像とタイヤ側面のロゴ用画像・法線をデータから削除。頂点の統合、メッシュ圧縮、モバイル版のポリゴン削減、タイヤ側面の無地化と材質調整を実施。画面上の車は実在メーカーの車種ではなく、外部制作のコンセプトカーです。制作者によるこのゲームの推奨・提携を意味しません。
+  </p>
+  <h2>Poly Haven — 実写由来の路面と環境光</h2>
+  <ul>
+    <li>
+      <a href="https://polyhaven.com/a/asphalt_track">Asphalt Track</a
+      >：Dimitrios Savva。色・OpenGL法線・粗さマップ、1K JPEG。
+    </li>
+    <li>
+      <a href="https://polyhaven.com/a/zwartkops_curve_sunset"
+        >Zwartkops Curve Sunset</a
+      >：Dimitrios Savva（撮影）、Jarod Guest（処理）。1K HDR。
+    </li>
+  </ul>
+  <p>
+    いずれも<a href="https://polyhaven.com/license"
+      >CC0（再配布・改変・商用利用可）</a
+    >。必要なファイルを同じGitHub
+    Pagesに保存し、ゲーム実行時には配布元へ接続しません。写真は遠景・反射・照明に使用し、道路・縁石・ガードレール・建物は3Dです。
+  </p>
+  <h2>描画ライブラリ</h2>
+  <p>
+    Three.js 0.187.0：<a href="https://threejs.org/">Three.js authors</a>、<a
+      href="THREE-LICENSE.txt"
+      >MIT License</a
+    >。GLTFLoader、HDRLoader、OrbitControlsを利用。同梱MeshoptDecoder（meshoptimizer
+    1.1）：© Arseny Kapoulkine、<a href="MESHOPT-LICENSE.txt">MIT License</a
+    >。配信JavaScript末尾にも同梱ライセンスを保持しています。
+  </p>
+  <h2>試作の範囲と性能</h2>
+  <p>
+    WebGL
+    2が必要です。高画質・標準・軽量の3段階と自動調整を用意しました。ガラスには透明度と環境反射を使い、画面全体を再描画する屈折パスを避けています。実際の素材サイズ・ファイルハッシュ・三角形数は<a
+      href="asset-manifest.json"
+      >アセット記録</a
+    >で確認できます。実測FPSは「計測と診断」から端末内で確認できます。iPad第9世代でのFPS・発熱・メモリと操作感は、実機での確認が必要です。
+  </p>
+  <p>
+    <a href="../">これまでのゲームへ</a> ·
+    <a href="https://github.com/test553378/my-drive">GitHub</a>
+  </p>
+</html>

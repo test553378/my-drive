@@ -1,0 +1,48 @@
+{
+  "environment": "Linux / Playwright WebKit 26 / not an iPad; no concurrent browser tests",
+  "note": "Initial-frame rendering cost snapshots, not a sustained FPS benchmark or iPad performance measurement. Includes the shadow pass.",
+  "snapshots": [
+    {
+      "quality": "high",
+      "buffer": [
+        1390,
+        1042
+      ],
+      "carTriangles": 213195,
+      "render": {
+        "calls": 102,
+        "triangles": 476402,
+        "geometries": 54,
+        "textures": 19
+      }
+    },
+    {
+      "quality": "standard",
+      "buffer": [
+        1125,
+        844
+      ],
+      "carTriangles": 100756,
+      "render": {
+        "calls": 102,
+        "triangles": 245390,
+        "geometries": 54,
+        "textures": 19
+      }
+    },
+    {
+      "quality": "low",
+      "buffer": [
+        800,
+        600
+      ],
+      "carTriangles": 100756,
+      "render": {
+        "calls": 102,
+        "triangles": 245390,
+        "geometries": 54,
+        "textures": 19
+      }
+    }
+  ]
+}

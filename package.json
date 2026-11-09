@@ -5,8 +5,9 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "test:e2e": "playwright test",
-    "check": "node --check game.js && node --check service-worker.js && prettier --check index.html style.css *.js tests",
-    "format": "prettier --write index.html style.css *.js tests"
+    "check": "node --check game.js && node --check service-worker.js && prettier --check index.html style.css *.js tests && prettier --check graphics-lab/index.html graphics-lab/lab.css graphics-lab/credits.html graphics-lab/src scripts",
+    "format": "prettier --write index.html style.css *.js tests graphics-lab/index.html graphics-lab/lab.css graphics-lab/credits.html graphics-lab/src scripts",
+    "build:graphics": "node scripts/build-graphics.mjs"
   },
   "repository": {
     "type": "git",
@@ -14,8 +15,14 @@
   },
   "type": "module",
   "devDependencies": {
+    "@gltf-transform/core": "4.2.1",
+    "@gltf-transform/extensions": "4.2.1",
+    "@gltf-transform/functions": "4.2.1",
     "@playwright/test": "1.56.1",
-    "prettier": "3.6.2"
+    "esbuild": "0.25.12",
+    "meshoptimizer": "0.24.0",
+    "prettier": "3.6.2",
+    "three": "0.187.0"
   },
   "private": true
 }
