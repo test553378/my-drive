@@ -1,3 +1,4 @@
+import { createAI, tickRivals, curveTarget } from "./rival-ai.js";
 import { DAMAGE } from "./race-config.js";
 import {
   initCondition,
@@ -34,16 +35,12 @@ export const slope = (z) => {
   return p.tx / (p.tz || 1e-6);
 };
 export const laneWorldX = (z, offset) => trackPose("C01", z, offset).x;
-export function createRivals(model = 0) {
-  const top = vehicle(model).top;
-  return [125, 87, 51, 20].map((z, i) => ({
-    z,
-    v: top * [0.85, 0.87, 0.84, 0.82][i],
-    speed: 0,
-    l: [-3.4, 3.1, -4.3, 4.4][i],
-    c: [1, 2, 3, 1][i],
-    wheelAngle: 0,
-  }));
+export function createRivals(
+  model = 0,
+  difficulty = "normal",
+  courseId = "C01",
+) {
+  return createAI(model, difficulty, courseId);
 }
 export function createRace(
   color = 0,
@@ -51,6 +48,7 @@ export function createRace(
   parts = {},
   courseId = "C01",
   seed = 12345,
+  aiDifficulty = "normal",
 ) {
   const track = getTrack(courseId),
     p = trackPose(track, 0);
@@ -72,6 +70,7 @@ export function createRace(
     model,
     parts: normalizeParts(parts),
     courseId: track.id,
+    aiDifficulty,
     brake: false,
     siren: false,
     fallTimer: 0,
@@ -189,6 +188,14 @@ export function advance(s, rivals, seconds) {
     let target =
       spec.top * (1 - clamp(p.grade, -0.15, 0.25) * 0.55) +
       (s.boost > 0 ? 18 : 0);
+    for (let ahead = 0; ahead <= (s.v * s.v) / (2 * spec.brake); ahead += 8) {
+      const corner = curveTarget(track, s.z + ahead, spec.top, 38);
+      target = Math.min(
+        target,
+        Math.sqrt(corner * corner + 2 * spec.brake * ahead) +
+          (s.boost > 0 ? 8 : 0),
+      );
+    }
     if (punctured) target = Math.min(target, spec.top * DAMAGE.topFactor);
     if (offroad) target *= 0.55;
     if (s.brake) target = 0;
@@ -281,37 +288,8 @@ export function advance(s, rivals, seconds) {
     event = contactPedestrian(s, previousDistance) || event;
     if (enterRepair(s, track)) event = "repair-start";
   }
+  tickRivals(s, rivals, dt);
   for (const r of rivals) {
-    if (r.finishTime !== undefined) {
-      r.speed = 0;
-      continue;
-    }
-    const rp = trackPose(track, r.z),
-      curveLimit =
-        track.difficulty === 1
-          ? 1
-          : clamp(
-              Math.sqrt(8 / Math.max(0.001, Math.abs(rp.curvature))) / spec.top,
-              0.65,
-              1,
-            );
-    r.speed = pedestrianStop(track, r.z, s.pedestrians)
-      ? 0
-      : (r.v || spec.top * 0.85) * curveLimit;
-    for (const o of s.obstacles)
-      if (
-        o.distance - r.z > 5 &&
-        o.distance - r.z < 55 &&
-        Math.abs(r.l - o.offset) < 2
-      )
-        r.l = o.offset > 0 ? -3.2 : 3.2;
-    const distance = r.speed * dt;
-    r.z += distance;
-    r.wheelAngle = (r.wheelAngle + distance / WHEEL_RADIUS) % TAU;
-    if (r.z >= track.length * 2) {
-      r.z = track.length * 2;
-      r.finishTime = s.time;
-    }
     const gap =
       ((((r.z - s.z + track.length / 2) % track.length) + track.length) %
         track.length) -

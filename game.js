@@ -1,4 +1,5 @@
 import { createActors } from "./actors.js";
+import { AI_LEVELS } from "./rival-ai.js";
 import { hasPuncture, repairArea } from "./damage.js";
 import { DAMAGE } from "./race-config.js";
 import { raceRank } from "./race-metrics.js";
@@ -666,6 +667,11 @@ void main(){
         "aria-pressed",
         String(button.dataset.course === S.courseId),
       );
+    for (const button of document.querySelectorAll("[data-ai]"))
+      button.setAttribute(
+        "aria-pressed",
+        String(button.dataset.ai === S.aiDifficulty),
+      );
     document.querySelector(".preview-hint").textContent =
       garageTab === "course"
         ? "↔ ゆびで コースを まわしてみよう"
@@ -686,6 +692,15 @@ void main(){
     steering: [S.steerL, S.steerR],
     model: VEHICLES[S.model].name,
     courseId: S.courseId,
+    aiDifficulty: S.aiDifficulty,
+    rivals: ai.map((r) => ({
+      distance: r.z,
+      speed: r.speed,
+      offset: r.l,
+      overtaking: r.overtaking,
+      penaltyTime: r.penaltyTime,
+      flatMask: [...r.flatMask],
+    })),
     courseLength: getTrack(S.courseId).length,
     checkpoints: S.checkpointsPassed,
     sceneCourse: scene?.track.id,
@@ -889,7 +904,8 @@ void main(){
   }
   function reset() {
     const { color, model, parts } = copySetup(S);
-    const courseId = S.courseId;
+    const courseId = S.courseId,
+      difficulty = S.aiDifficulty;
     Object.assign(
       S,
       createRace(
@@ -898,6 +914,7 @@ void main(){
         parts,
         courseId,
         Math.floor(Math.random() * 0x7fffffff),
+        difficulty,
       ),
       { phase: "countdown" },
     );
@@ -905,7 +922,11 @@ void main(){
     document.body.classList.remove("in-garage");
     $("modal").classList.remove("paused");
     canvas.setAttribute("aria-label", "3Dスーパーカーレース");
-    ai.splice(0, ai.length, ...createRivals(S.model));
+    ai.splice(
+      0,
+      ai.length,
+      ...createRivals(S.model, S.aiDifficulty, S.courseId),
+    );
     $("modal").classList.add("hidden");
     $("countdown").classList.add("visible");
     $("pause").textContent = "Ⅱ";
@@ -1401,6 +1422,12 @@ void main(){
     button.addEventListener("click", () => {
       if (!canCustomize()) return;
       S.courseId = button.dataset.course;
+      refreshGarage();
+    });
+  for (const button of document.querySelectorAll("[data-ai]"))
+    button.addEventListener("click", () => {
+      if (!canCustomize() || !AI_LEVELS[button.dataset.ai]) return;
+      S.aiDifficulty = button.dataset.ai;
       refreshGarage();
     });
 
