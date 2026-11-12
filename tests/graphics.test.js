@@ -9,6 +9,7 @@ import { MeshoptDecoder } from "meshoptimizer";
 import { QUALITY, fitBuffer, frameStats } from "../graphics-lab/src/quality.js";
 import { buildCircuit } from "../graphics-lab/src/scene.js";
 import { mergeRigidParts } from "../graphics-lab/src/merge-parts.js";
+import { extractWheelRig } from "../graphics-lab/src/wheel-rig.js";
 const base = new URL("../graphics-lab/", import.meta.url),
   manifest = JSON.parse(await readFile(new URL("asset-manifest.json", base)));
 test("self-hosted assets match their recorded hashes and each first visit stays below 20MB", async () => {
@@ -68,6 +69,82 @@ test("both external GLBs preserve four wheel hierarchies and contain none of the
   }
   assert.ok(manifest.models[1].triangles < manifest.models[0].triangles * 0.6);
 });
+for (const model of manifest.models)
+  test(`${model.name}: actual wheel axes stay straight while rolling and follow steering without moving the hubs or spinning calipers`, async () => {
+    await MeshoptDecoder.ready;
+    const io = new NodeIO()
+        .registerExtensions(ALL_EXTENSIONS)
+        .registerDependencies({ "meshopt.decoder": MeshoptDecoder }),
+      doc = await io.read(new URL("assets/" + model.name, base).pathname);
+    // Read the shipped GLB transforms, including the non-identity scene parent.
+    // Checking only the animation pivot angle missed the baked front-wheel pose.
+    function hierarchy(node) {
+      const object = new THREE.Group();
+      object.name = node.getName();
+      object.position.fromArray(node.getTranslation());
+      object.quaternion.fromArray(node.getRotation());
+      object.scale.fromArray(node.getScale());
+      for (const child of node.listChildren()) object.add(hierarchy(child));
+      return object;
+    }
+    const source = new THREE.Group();
+    for (const node of doc.getRoot().listScenes()[0].listChildren())
+      source.add(hierarchy(node));
+    source.updateMatrixWorld(true);
+    const names = ["WheelFrontL", "WheelFrontR", "WheelRearL", "WheelRearR"],
+      centers = names.map((n) =>
+        source.getObjectByName(n).getWorldPosition(new THREE.Vector3()),
+      ),
+      { root, units } = extractWheelRig(source);
+    assert.equal(units.length, 4);
+    for (const [i, unit] of units.entries()) {
+      const rim = unit.spin.getObjectByName(names[i] + "Rim"),
+        caliper = unit.outer.getObjectByName(names[i] + "BrakePad");
+      assert.ok(rim && caliper, names[i]);
+      assert.equal(caliper.parent, unit.outer);
+      assert.ok(unit.outer.position.distanceTo(centers[i]) < 1e-6);
+      for (const steering of [0, -0.24, 0.24, 0]) {
+        unit.outer.rotation.y = unit.front ? steering : 0;
+        root.updateMatrixWorld(true);
+        const fixedPosition = caliper.getWorldPosition(new THREE.Vector3()),
+          fixedRotation = caliper.getWorldQuaternion(new THREE.Quaternion()),
+          expectedAxis = new THREE.Vector3(1, 0, 0).applyAxisAngle(
+            new THREE.Vector3(0, 1, 0),
+            unit.front ? steering : 0,
+          );
+        for (const rolling of [0, 0.8, 3.4, 8.5]) {
+          unit.spin.rotation.x = rolling;
+          root.updateMatrixWorld(true);
+          const axis = new THREE.Vector3(1, 0, 0).applyQuaternion(
+            rim.getWorldQuaternion(new THREE.Quaternion()),
+          );
+          assert.ok(
+            axis.distanceTo(expectedAxis) < 1e-6,
+            `${names[i]}: axle ${axis.toArray()} must be ${expectedAxis.toArray()} (roll ${rolling})`,
+          );
+          assert.ok(
+            caliper
+              .getWorldPosition(new THREE.Vector3())
+              .distanceTo(fixedPosition) < 1e-6,
+          );
+          assert.ok(
+            1 -
+              Math.abs(
+                caliper
+                  .getWorldQuaternion(new THREE.Quaternion())
+                  .dot(fixedRotation),
+              ) <
+              1e-6,
+          );
+          assert.ok(
+            unit.spin
+              .getWorldPosition(new THREE.Vector3())
+              .distanceTo(centers[i]) < 1e-6,
+          );
+        }
+      }
+    }
+  });
 test("real road geometry faces up, uses all three PBR maps and the near scene remains three-dimensional", () => {
   const textures = {
       color: new THREE.Texture(),

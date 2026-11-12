@@ -8,6 +8,7 @@ import { trackPose, cameraPose } from "../../tracks.js";
 import { buildCircuit, track } from "./scene.js";
 import { QUALITY, fitBuffer, frameStats } from "./quality.js";
 import { mergeRigidParts } from "./merge-parts.js";
+import { extractWheelRig } from "./wheel-rig.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("scene");
 const params = new URLSearchParams(location.search),
@@ -15,7 +16,7 @@ const params = new URLSearchParams(location.search),
     ? params.get("quality")
     : "standard";
 const state = {
-  version: "graphics-p2.1",
+  version: "graphics-p2.2",
   ready: false,
   mode: "inspect",
   paused: false,
@@ -232,31 +233,7 @@ async function loadCar() {
   loader.setMeshoptDecoder(MeshoptDecoder);
   const gltf = await loader.parseAsync(buffer, "");
   const model = gltf.scene;
-  model.updateMatrixWorld(true);
-  const next = new THREE.Group(),
-    units = [];
-  next.name = "External concept car";
-  // Extract actual GLB wheel hierarchies. Calipers steer but do not spin.
-  for (const name of [
-    "WheelFrontL",
-    "WheelFrontR",
-    "WheelRearL",
-    "WheelRearR",
-  ]) {
-    const wheel = model.getObjectByName(name);
-    if (!wheel) throw Error(`GLB is missing wheel: ${name}`);
-    const position = wheel.getWorldPosition(new THREE.Vector3()),
-      outer = new THREE.Group(),
-      spin = new THREE.Group();
-    outer.position.copy(position);
-    next.add(outer);
-    outer.add(spin);
-    next.updateMatrixWorld(true);
-    for (const child of [...wheel.children])
-      (/BrakePad/.test(child.name) ? outer : spin).attach(child);
-    wheel.removeFromParent();
-    units.push({ outer, spin, front: name.startsWith("WheelFront") });
-  }
+  const { root: next, units } = extractWheelRig(model);
   for (const unit of units) mergeRigidParts(unit.spin);
   mergeRigidParts(model);
   model.position.y = 0.004;
