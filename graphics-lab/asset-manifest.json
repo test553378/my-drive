@@ -1,5 +1,5 @@
 {
-  "version": "graphics-p2.1",
+  "version": "graphics-p2.2",
   "originalCarSha256": "c272098089d78c5cd9fd9f24ff50ee8acf8d932c55f2d55fc10adb6c8998966b",
   "models": [
     {
@@ -44,7 +44,7 @@
     "version": "0.187.0"
   },
   "bundle": {
-    "bytes": 706208,
-    "sha256": "775775c2525d6e0184eccf34200cfe07c9cc4a3e9470eae4787422be0a0128a7"
+    "bytes": 706438,
+    "sha256": "2fc1ed9fce605b2a44e130a34c62c244fb7bfe25a59a9427d83b88aaab20769f"
   }
 }
