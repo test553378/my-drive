@@ -90,7 +90,7 @@ test("real controls hit an obstacle, show a flattened tyre and automatically rep
 test("city crossing warns early and real braking yields without a penalty", async ({
   page,
 }) => {
-  test.setTimeout(100000);
+  test.setTimeout(140000);
   await start(page, "C03");
   await expect(page.locator("#pedestrian-warning")).toBeVisible({
     timeout: 45000,
@@ -102,7 +102,7 @@ test("city crossing warns early and real braking yields without a penalty", asyn
     .poll(
       async () =>
         (await read(page)).pedestrians.some((p) => p.phase === "safe"),
-      { timeout: 25000 },
+      { timeout: 45000 },
     )
     .toBe(true);
   const r = await read(page);

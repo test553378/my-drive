@@ -413,6 +413,8 @@ test("the app shell renders after a genuine offline navigation", async ({
   context,
   browserName,
 }) => {
+  // Two complete PBR initializations plus browser-context setup on software GPUs.
+  test.setTimeout(180000);
   test.skip(
     browserName === "webkit" && process.platform === "linux",
     "Linux Playwright WebKit reports an internal error for offline navigation even with a minimal unrelated cached-page fixture. See docs/VERIFICATION.md; verify offline Safari on device.",
@@ -461,11 +463,12 @@ test("visibility changes stop animation and preserve a held-input race until the
 test("a full two-lap race renders through the lap seams, finishes and restarts", async ({
   page,
 }) => {
-  test.setTimeout(220000);
+  // SwiftShader can render below 2 fps; the simulation deliberately caps frame dt.
+  test.setTimeout(360000);
   await start(page);
   await expect
     .poll(async () => (await read(page)).runtime.phase, {
-      timeout: 180000,
+      timeout: 300000,
       intervals: [2000],
     })
     .toBe("finish");
