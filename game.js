@@ -947,7 +947,8 @@ void main(){
       $("subtitle").textContent = "じゅんびが できたら つづけよう";
       $("choose").textContent = "くるまの いろも かえられるよ！";
       $("start").textContent = "▶ つづきから";
-      $("instructions").textContent = "◀ ▶ で まがる ／ はなすと まんなかへ";
+      $("instructions").textContent =
+        "◀ ▶ で まがる ／ はなすと そのばを キープ";
     } else if (S.phase === "pause") resume();
     applyAudio();
   }

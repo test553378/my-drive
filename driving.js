@@ -197,24 +197,22 @@ export function advance(s, rivals, seconds) {
       s.v +=
         (target - s.v) *
         (1 - Math.exp(-dt * spec.accel * (punctured ? DAMAGE.accelFactor : 1)));
-    const safeSpeed = Math.sqrt(7 / Math.max(0.001, Math.abs(p.curvature))),
-      excess =
-        track.difficulty === 1 ? 0 : Math.max(0, (s.v - safeSpeed) / spec.top);
     const targetSteer =
       dir *
       spec.turn *
       (0.5 + (s.v / spec.top) * 0.5) *
       (punctured ? DAMAGE.handlingFactor : 1);
-    s.steerV += (targetSteer - s.steerV) * (1 - Math.exp(-dt * 6));
+    // Releasing/cancelling all steering stops lateral travel immediately.
+    // Following a curved route must preserve the lane-relative offset too.
+    s.steerV = dir
+      ? s.steerV + (targetSteer - s.steerV) * (1 - Math.exp(-dt * 10))
+      : 0;
     s.offset +=
-      (s.steerV +
-        Math.sign(p.curvature) * excess * 3.2 +
-        (punctured ? s.damageSide * DAMAGE.drift : 0)) *
+      (s.steerV + (punctured ? s.damageSide * DAMAGE.drift : 0)) *
       dt *
       Math.min(1, s.v / 6);
     const guide =
       punctured && s.pitAssist && pit && pit.delta < DAMAGE.repairLead;
-    if (!dir && !guide) s.offset *= Math.exp(-dt * 0.85 * Math.min(1, s.v / 3));
     if (!dir && guide && s.v > 0) {
       const inside = Math.min(EDGE, track.halfWidth - 1.6),
         mix = clamp((40 - pit.delta) / 30, 0, 1),

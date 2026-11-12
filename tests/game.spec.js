@@ -148,7 +148,7 @@ test("both original vehicle shapes and all paint choices render and survive race
   expect((await read(page)).runtime.color).toBe(3);
 });
 
-test("large controls steer, release on cancellation, recentre and allow turbo", async ({
+test("large controls steer, release on cancellation, hold position and allow turbo", async ({
   page,
 }) => {
   await start(page);
@@ -170,9 +170,9 @@ test("large controls steer, release on cancellation, recentre and allow turbo", 
     pointerType: "touch",
   });
   await expect(right).not.toHaveClass(/is-down/);
-  await expect
-    .poll(async () => (await read(page)).runtime.offset)
-    .toBeLessThan(1);
+  const held = (await read(page)).runtime.offset;
+  await page.waitForTimeout(700);
+  expect(Math.abs((await read(page)).runtime.offset - held)).toBeLessThan(0.02);
   await page
     .locator("#left")
     .dispatchEvent("pointerdown", { pointerId: 13, pointerType: "touch" });
