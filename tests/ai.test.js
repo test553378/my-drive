@@ -127,3 +127,39 @@ test("AI respects crossings and shares puncture, repair and pedestrian penalty r
   assert.ok(r.flatMask.some(Boolean));
   assert.ok(r.speed <= 26.4);
 });
+test("side-by-side rivals do not merge through one another while approaching an apex", () => {
+  const p = context(),
+    r = createAI(0, "hard");
+  r.length = 2;
+  Object.assign(r[0], { z: 100, l: -1.8, v: 35, speed: 35 });
+  Object.assign(r[1], { z: 101, l: 1.8, v: 35, speed: 35 });
+  for (let i = 0; i < 120; i++) {
+    p.time += 0.05;
+    tickRivals(p, r, 0.05);
+    if (Math.abs(r[0].z - r[1].z) < 5)
+      assert.ok(Math.abs(r[0].l - r[1].l) > 2.1);
+  }
+});
+test("all eight rival vehicle types finish and respect their own acceleration and steering limits", () => {
+  for (let model = 0; model < 8; model++) {
+    const p = context(),
+      cars = createAI(model, "hard");
+    for (
+      let i = 0;
+      i < 4000 && cars.some((r) => r.finishTime === undefined);
+      i++
+    ) {
+      p.time += 0.05;
+      tickRivals(p, cars, 0.05);
+      assert.ok(
+        cars.every(
+          (r) => Number.isFinite(r.z) && r.speed <= vehicle(model).top,
+        ),
+      );
+    }
+    assert.ok(
+      cars.every((r) => r.finishTime !== undefined),
+      `model ${model}`,
+    );
+  }
+});

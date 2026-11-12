@@ -1750,3 +1750,36 @@ button,
     font-size: 17px;
   }
 }
+.asset-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #0d1725ee;
+  text-align: center;
+}
+.asset-loading[hidden] {
+  display: none;
+}
+.quality-settings {
+  border: 0;
+  margin: 12px 0;
+  padding: 8px 0;
+}
+.quality-settings label {
+  display: block;
+  padding: 12px 0;
+}
+.quality-settings input {
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+}
+.quality-settings [aria-pressed="true"] {
+  outline: 2px solid #65e2ba;
+}
+.start:disabled {
+  opacity: 0.5;
+}

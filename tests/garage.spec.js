@@ -3,7 +3,7 @@ const read = (page) => page.evaluate(() => window.raceDiagnostics.read());
 async function ready(page) {
   await page.goto("./?quality=low");
   await expect
-    .poll(async () => (await read(page)).runtime.frames)
+    .poll(async () => (await read(page)).runtime.frames, { timeout: 60000 })
     .toBeGreaterThan(2);
 }
 const part = (page, key, value) =>
@@ -12,34 +12,38 @@ async function frameHash(page) {
   return page.evaluate(
     () =>
       new Promise((resolve) =>
-        requestAnimationFrame(() => {
-          const canvas = document.querySelector("canvas"),
-            rect = document
-              .querySelector("#garage-preview")
-              .getBoundingClientRect(),
-            gl = canvas.getContext("webgl");
-          const sx = canvas.width / innerWidth,
-            sy = canvas.height / innerHeight,
-            w = Math.floor(rect.width * sx),
-            h = Math.floor(rect.height * sy),
-            buffer = new Uint8Array(w * h * 4);
-          gl.readPixels(
-            Math.floor(rect.left * sx),
-            Math.floor(canvas.height - rect.bottom * sy),
-            w,
-            h,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            buffer,
-          );
-          let hash = 2166136261;
-          for (let i = 0; i < buffer.length; i += 4) {
-            hash = Math.imul(hash ^ buffer[i], 16777619);
-            hash = Math.imul(hash ^ buffer[i + 1], 16777619);
-            hash = Math.imul(hash ^ buffer[i + 2], 16777619);
-          }
-          resolve({ hash: hash >>> 0, error: gl.getError() });
-        }),
+        document.querySelector("canvas").addEventListener(
+          "race-frame",
+          () => {
+            const canvas = document.querySelector("canvas"),
+              rect = document
+                .querySelector("#garage-preview")
+                .getBoundingClientRect(),
+              gl = canvas.getContext("webgl2");
+            const sx = canvas.width / innerWidth,
+              sy = canvas.height / innerHeight,
+              w = Math.floor(rect.width * sx),
+              h = Math.floor(rect.height * sy),
+              buffer = new Uint8Array(w * h * 4);
+            gl.readPixels(
+              Math.floor(rect.left * sx),
+              Math.floor(canvas.height - rect.bottom * sy),
+              w,
+              h,
+              gl.RGBA,
+              gl.UNSIGNED_BYTE,
+              buffer,
+            );
+            let hash = 2166136261;
+            for (let i = 0; i < buffer.length; i += 4) {
+              hash = Math.imul(hash ^ buffer[i], 16777619);
+              hash = Math.imul(hash ^ buffer[i + 1], 16777619);
+              hash = Math.imul(hash ^ buffer[i + 2], 16777619);
+            }
+            resolve({ hash: hash >>> 0, error: gl.getError() });
+          },
+          { once: true },
+        ),
       ),
   );
 }

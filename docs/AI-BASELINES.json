@@ -11,8 +11,8 @@
       "pedestrians": false,
       "averageLapSeconds": [
         39.32,
-        40.95,
-        40.5,
+        40.9,
+        40.42,
         42.25
       ]
     },
@@ -26,8 +26,8 @@
       "pedestrians": false,
       "averageLapSeconds": [
         31.82,
-        33.22,
-        32.8,
+        33.17,
+        32.72,
         34.22
       ]
     },
@@ -41,8 +41,8 @@
       "pedestrians": false,
       "averageLapSeconds": [
         31.12,
-        32.47,
-        32.1,
+        32.45,
+        32.02,
         33.5
       ]
     },
@@ -55,10 +55,10 @@
       "obstacles": false,
       "pedestrians": false,
       "averageLapSeconds": [
-        50.12,
-        50.25,
-        50.57,
-        51.65
+        50.05,
+        50.3,
+        50.5,
+        51.62
       ]
     },
     {
@@ -70,10 +70,10 @@
       "obstacles": false,
       "pedestrians": false,
       "averageLapSeconds": [
-        40.27,
-        40.55,
-        40.75,
-        41.67
+        40.52,
+        40.5,
+        40.97,
+        41.6
       ]
     },
     {
@@ -86,9 +86,9 @@
       "pedestrians": false,
       "averageLapSeconds": [
         37.92,
-        38.6,
-        39.22,
-        39.85
+        38.57,
+        39.15,
+        39.9
       ]
     },
     {
@@ -100,10 +100,10 @@
       "obstacles": false,
       "pedestrians": false,
       "averageLapSeconds": [
-        49.07,
-        49.12,
-        49.42,
-        49.87
+        49.4,
+        48.5,
+        49.1,
+        49.8
       ]
     },
     {
@@ -115,10 +115,10 @@
       "obstacles": false,
       "pedestrians": false,
       "averageLapSeconds": [
-        39.47,
-        39.52,
-        39.57,
-        40.27
+        40.27,
+        38.75,
+        39.72,
+        40.07
       ]
     },
     {
@@ -130,10 +130,10 @@
       "obstacles": false,
       "pedestrians": false,
       "averageLapSeconds": [
-        36.45,
-        36.52,
-        36.75,
-        37.47
+        36.72,
+        36.15,
+        37,
+        37.42
       ]
     },
     {
@@ -145,9 +145,9 @@
       "obstacles": false,
       "pedestrians": false,
       "averageLapSeconds": [
-        56.4,
+        56.37,
         56.65,
-        56.95,
+        57.02,
         58
       ]
     },
@@ -160,10 +160,10 @@
       "obstacles": false,
       "pedestrians": false,
       "averageLapSeconds": [
-        45.35,
-        45.75,
-        46.17,
-        46.9
+        45.5,
+        45.72,
+        46.12,
+        46.8
       ]
     },
     {
@@ -175,10 +175,10 @@
       "obstacles": false,
       "pedestrians": false,
       "averageLapSeconds": [
-        42.8,
-        43.55,
-        44.17,
-        44.82
+        42.77,
+        43.5,
+        44,
+        44.85
       ]
     }
   ]

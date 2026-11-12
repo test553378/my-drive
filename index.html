@@ -14,7 +14,7 @@
     />
     <meta
       name="description"
-      content="4〜5さい向けリアル3Dスーパーカーレース。広告・課金・外部通信なし。"
+      content="4〜5さい向けリアル3Dスーパーカーレース。広告・課金・個人情報収集なし。"
     />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
@@ -23,6 +23,15 @@
   </head>
   <body class="in-garage">
     <canvas id="world" aria-label="3Dスーパーカーレース"></canvas>
+    <div id="asset-loading" class="asset-loading" role="status">
+      <div class="panel">
+        <h2>3Dの じゅんびを しているよ</h2>
+        <p id="asset-loading-text">くるまと コースを じゅんびしています…</p>
+        <button class="secondary" id="loading-help">
+          おとなのかたへ：動作診断
+        </button>
+      </div>
+    </div>
     <div class="ui">
       <div class="top">
         <div class="hud-group">
@@ -402,6 +411,34 @@
           rows="12"
           spellcheck="false"
         ></textarea>
+        <fieldset class="quality-settings">
+          <legend>画質</legend>
+          <div class="part-choices">
+            <button class="secondary" data-quality="low" aria-pressed="false">
+              軽量
+            </button>
+            <button
+              class="secondary"
+              data-quality="standard"
+              aria-pressed="true"
+            >
+              標準
+            </button>
+            <button class="secondary" data-quality="high" aria-pressed="false">
+              高画質
+            </button>
+          </div>
+          <label
+            ><input
+              type="checkbox"
+              id="auto-quality"
+              checked
+            />動作が重いときは画質を自動調整</label
+          >
+          <p class="note">
+            <a href="./graphics-lab/credits.html">素材とライセンス</a>
+          </p>
+        </fieldset>
         <p id="diagnostic-status" role="status"></p>
         <div class="diagnostic-actions">
           <button class="secondary" id="copy-report">コピー</button
@@ -415,7 +452,7 @@
         このゲームにはJavaScriptが必要です。Safariの設定を確認してください。
       </div></noscript
     >
-    <script src="./diagnostics.js"></script>
-    <script type="module" src="./game.js"></script>
+    <script src="./diagnostics.js?v=7.0.0"></script>
+    <script type="module" src="./game.bundle.js?v=7.0.0"></script>
   </body>
 </html>

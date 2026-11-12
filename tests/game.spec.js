@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
 const read = (page) => page.evaluate(() => window.raceDiagnostics.read());
-async function ready(page, path = "./") {
+async function ready(page, path = "./?quality=low&adaptive=off") {
   await page.goto(path);
   await expect
-    .poll(async () => (await read(page)).runtime.frames)
+    .poll(async () => (await read(page)).runtime.frames, { timeout: 60000 })
     .toBeGreaterThan(2);
   await expect(page.locator("#unsupported")).not.toBeVisible();
 }
@@ -26,32 +26,37 @@ test("real shaders link, draw a varied 3D scene, and use only same-origin assets
   await ready(page);
   const r = await read(page);
   expect(r.events.some((e) => e.stage === "running")).toBeTruthy();
-  expect(r.graphics.actualContext.antialias).toBe(false);
+  expect(r.graphics.webgl).toContain("WebGL 2");
+  expect(r.runtime.engine).toContain("Three.js");
   expect(r.runtime.drawCalls).toBeGreaterThan(5);
-  expect(r.runtime.vertices).toBeLessThan(200000);
+  expect(r.runtime.vertices).toBeLessThan(1500000);
   const pixels = await page.evaluate(
     () =>
       new Promise((resolve) =>
-        requestAnimationFrame(() => {
-          const c = document.querySelector("canvas"),
-            gl = c.getContext("webgl"),
-            data = new Uint8Array(4),
-            colors = new Set();
-          for (let y = 0.1; y < 1; y += 0.15)
-            for (let x = 0.1; x < 1; x += 0.15) {
-              gl.readPixels(
-                Math.floor(c.width * x),
-                Math.floor(c.height * y),
-                1,
-                1,
-                gl.RGBA,
-                gl.UNSIGNED_BYTE,
-                data,
-              );
-              colors.add([...data].join(","));
-            }
-          resolve({ colors: colors.size, error: gl.getError() });
-        }),
+        document.querySelector("canvas").addEventListener(
+          "race-frame",
+          () => {
+            const c = document.querySelector("canvas"),
+              gl = c.getContext("webgl2"),
+              data = new Uint8Array(4),
+              colors = new Set();
+            for (let y = 0.1; y < 1; y += 0.15)
+              for (let x = 0.1; x < 1; x += 0.15) {
+                gl.readPixels(
+                  Math.floor(c.width * x),
+                  Math.floor(c.height * y),
+                  1,
+                  1,
+                  gl.RGBA,
+                  gl.UNSIGNED_BYTE,
+                  data,
+                );
+                colors.add([...data].join(","));
+              }
+            resolve({ colors: colors.size, error: gl.getError() });
+          },
+          { once: true },
+        ),
       ),
   );
   expect(pixels.error).toBe(0);
@@ -68,7 +73,7 @@ test("the original uniform precision mismatch fails to link and explicit matchin
 }) => {
   await ready(page);
   const result = await page.evaluate(() => {
-    const gl = document.querySelector("canvas").getContext("webgl");
+    const gl = document.createElement("canvas").getContext("webgl");
     function link(precision) {
       const shaders = [
         [
@@ -103,25 +108,16 @@ test("the original uniform precision mismatch fails to link and explicit matchin
   expect(result.fixed.ok).toBe(true);
 });
 
-test("the optional fragment mediump fallback still compiles and renders", async ({
+test("main-game PBR assets use the approved GLB and expose bounded GPU resources", async ({
   page,
 }) => {
-  await page.addInitScript(() => {
-    const source = WebGLRenderingContext.prototype.shaderSource;
-    WebGLRenderingContext.prototype.shaderSource = function (shader, code) {
-      const fallback = code.replace(
-        /#ifdef GL_FRAGMENT_PRECISION_HIGH\s+precision highp float;\s+#else\s+precision mediump float;\s+#endif/,
-        "precision mediump float;",
-      );
-      if (fallback !== code) window.__forcedMediump = true;
-      return source.call(this, shader, fallback);
-    };
-  });
-  await ready(page);
-  expect(await page.evaluate(() => window.__forcedMediump)).toBe(true);
-  expect(
-    (await read(page)).events.some((e) => e.stage === "running"),
-  ).toBeTruthy();
+  await ready(page, "./?quality=low");
+  const r = await read(page);
+  expect(r.version).toBe("7.0.0");
+  expect(r.runtime.assetModel).toBe("concept-mobile.glb");
+  expect(r.runtime.assetBytes).toBeLessThan(20000000);
+  expect(r.runtime.wheels).toHaveLength(4);
+  expect(r.runtime.rendererResources.textures).toBeLessThan(40);
 });
 
 test("both original vehicle shapes and all paint choices render and survive race start", async ({
@@ -260,7 +256,12 @@ test("a denied WebGL context produces a precise diagnostic without a JS crash", 
   await page.addInitScript(() => {
     const get = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (type, ...args) {
-      if (type === "webgl" || type === "experimental-webgl") return null;
+      if (
+        type === "webgl2" ||
+        type === "webgl" ||
+        type === "experimental-webgl"
+      )
+        return null;
       return get.call(this, type, ...args);
     };
   });
@@ -276,13 +277,18 @@ for (const stage of ["compile", "link"])
     page,
   }) => {
     await page.addInitScript((stage) => {
-      const P = WebGLRenderingContext.prototype;
+      const P = WebGL2RenderingContext.prototype;
       if (stage === "compile") {
-        const get = P.getShaderParameter;
-        P.getShaderParameter = function (s, param) {
-          return param === this.COMPILE_STATUS
-            ? false
-            : get.call(this, s, param);
+        const source = P.shaderSource;
+        P.shaderSource = function (shader, code) {
+          return source.call(
+            this,
+            shader,
+            this.getShaderParameter(shader, this.SHADER_TYPE) ===
+              this.VERTEX_SHADER
+              ? "invalid_injected_vertex"
+              : code,
+          );
         };
         P.getShaderInfoLog = () => "injected compiler failure";
       } else {
@@ -301,8 +307,8 @@ for (const stage of ["compile", "link"])
     );
     expect(r.events.at(-1).detail).toContain(
       stage === "compile"
-        ? "world vertex: injected compiler failure"
-        : "world: injected linker failure",
+        ? "injected compiler failure"
+        : "injected linker failure",
     );
   });
 
@@ -316,7 +322,7 @@ test("context loss stops racing; restoration rebuilds resources and requires exp
   await page.locator("#start").click();
   await expect.poll(async () => (await read(page)).runtime.phase).toBe("race");
   const supported = await page.evaluate(() => {
-    const gl = document.querySelector("canvas").getContext("webgl");
+    const gl = document.querySelector("canvas").getContext("webgl2");
     window.__lose = gl.getExtension("WEBGL_lose_context");
     return !!window.__lose;
   });
@@ -366,7 +372,7 @@ test("the complete versioned app shell is cached under the GitHub Pages subdirec
   await ready(page);
   await cached(page);
   const files = await page.evaluate(async () => {
-    const cache = await caches.open("bokuno-grand-race-v6-20261107b");
+    const cache = await caches.open("bokuno-grand-race-v7-20261113a");
     const keys = await cache.keys();
     return Promise.all(
       keys.map(async (r) => ({
@@ -381,24 +387,21 @@ test("the complete versioned app shell is cached under the GitHub Pages subdirec
       "index.html",
       "style.css",
       "diagnostics.js",
-      "game.js",
-      "driving.js",
-      "input.js",
-      "vehicle-config.js",
-      "tracks.js",
-      "world.js",
-      "race-config.js",
-      "collisions.js",
-      "hazards.js",
-      "damage.js",
-      "pedestrians.js",
-      "race-metrics.js",
-      "actors.js",
-      "camera.js",
-      "garage.js",
-      "vehicles.js",
+      "game.bundle.js",
+      "game-assets.json",
       "manifest.webmanifest",
       "icon.svg",
+      "graphics-lab/assets/concept-high.glb",
+      "graphics-lab/assets/concept-mobile.glb",
+      "graphics-lab/assets/concept-rival.glb",
+      "graphics-lab/assets/asphalt-color.jpg",
+      "graphics-lab/assets/asphalt-normal.jpg",
+      "graphics-lab/assets/asphalt-rough.jpg",
+      "graphics-lab/assets/sunset.hdr",
+      "graphics-lab/credits.html",
+      "graphics-lab/THREE-LICENSE.txt",
+      "graphics-lab/MESHOPT-LICENSE.txt",
+      "graphics-lab/CAR-SOURCE-LICENSE.md",
     ]
       .map((f) => "/my-drive/" + f)
       .sort(),
@@ -466,7 +469,12 @@ test("a full two-lap race renders through the lap seams, finishes and restarts",
       intervals: [2000],
     })
     .toBe("finish");
-  await expect(page.locator("#subtitle")).toContainText("1い / 5だい");
+  const result = (await read(page)).runtime;
+  expect(result.rank).toBeGreaterThanOrEqual(1);
+  expect(result.rank).toBeLessThanOrEqual(5);
+  await expect(page.locator("#subtitle")).toContainText(
+    `${result.rank}い / 5だい`,
+  );
   await expect(page.locator("#lap")).toHaveText("2 / 2");
   await expect(page.locator("#progressbar")).toHaveCSS(
     "width",

@@ -3,8 +3,9 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const report = {
-    version: "6.0.0",
+    version: "7.0.0",
     stage: "loading",
+    failure: null,
     events: [],
     graphics: {},
     runtime: {},
@@ -12,7 +13,8 @@
   let opener;
   let runtime = () => ({});
   function event(stage, detail = "") {
-    report.stage = stage;
+    if (stage === "context-restored") report.failure = null;
+    if (!report.failure || stage === report.failure.stage) report.stage = stage;
     report.events.push({ stage, detail: String(detail).slice(0, 1600) });
     report.events = report.events.slice(-20);
   }
@@ -34,6 +36,7 @@
     opener?.focus();
   }
   function failure(stage, detail) {
+    report.failure = { stage, detail: String(detail).slice(0, 1600) };
     event(stage, detail);
     window.dispatchEvent(new Event("race-fatal"));
     $("unsupported").classList.add("visible");
@@ -62,7 +65,9 @@
       close();
     }
     if (e.key === "Tab") {
-      const items = [...$("diagnostics").querySelectorAll("textarea,button")];
+      const items = [
+        ...$("diagnostics").querySelectorAll("textarea,button,input,a[href]"),
+      ];
       const index = items.indexOf(document.activeElement);
       if (e.shiftKey && index <= 0) {
         e.preventDefault();

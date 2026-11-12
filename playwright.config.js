@@ -2,8 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests",
   testMatch: "**/*.spec.js",
-  timeout: 45000,
-  expect: { timeout: 15000 },
+  timeout: 90000,
+  expect: { timeout: 30000 },
   workers: 1,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {

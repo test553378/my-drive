@@ -10,6 +10,7 @@ import {
 } from "./damage.js";
 import { contactPedestrian } from "./pedestrians.js";
 import { sweptContact } from "./collisions.js";
+import { DAMAGE } from "./race-config.js";
 
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 export const AI_LEVELS = Object.freeze({
@@ -202,6 +203,19 @@ export function tickRivals(player, rivals, dt) {
           ),
         );
     }
+    const rear = traffic.find(
+      (a) =>
+        a.gap < 0 &&
+        a.gap > -cfg.passDistance &&
+        a.speed > oldSpeed + 2 &&
+        Math.abs(a.l - r.l) < a.width,
+    );
+    if (rear && !r.overtaking) {
+      const lanes = [rear.l - rear.width - 0.35, rear.l + rear.width + 0.35]
+        .filter((l) => Math.abs(l) <= limit && clear(l))
+        .sort((a, b) => Math.abs(a - r.l) - Math.abs(b - r.l));
+      if (lanes.length) goal = lanes[0];
+    }
     for (const o of player.obstacles) {
       const gap = o.distance - r.z;
       if (gap <= 0 || gap > Math.max(36, oldSpeed * 2.5)) continue;
@@ -235,7 +249,7 @@ export function tickRivals(player, rivals, dt) {
     }
     const pit = repairArea(track, r.z);
     if (hasPuncture(r)) {
-      target = Math.min(target, spec.top * 0.6);
+      target = Math.min(target, spec.top * DAMAGE.topFactor);
       if (pit && pit.delta < 170)
         goal = pit.delta < 40 ? pit.offset : Math.min(limit, pit.offset);
     } else if (r.pitExit) {
@@ -244,10 +258,25 @@ export function tickRivals(player, rivals, dt) {
     }
     const maxLane = hasPuncture(r) || r.pitExit ? track.halfWidth + 3 : limit;
     const nextLane = clamp(goal, -maxLane, maxLane);
-    r.l += clamp(nextLane - r.l, -cfg.lateral * dt, cfg.lateral * dt);
+    const lateral =
+      Math.min(cfg.lateral, spec.turn) *
+      (hasPuncture(r) ? DAMAGE.handlingFactor : 1);
+    const candidate = r.l + clamp(nextLane - r.l, -lateral * dt, lateral * dt);
+    // Side-by-side cars must not converge onto the same apex. Keep the lane
+    // until the neighbouring body clears, rather than passing through it.
+    const beside = traffic.some(
+      (a) =>
+        Math.abs(a.gap) < Math.max(18, Math.abs(a.speed - oldSpeed)) &&
+        Math.abs(candidate - a.l) < a.width &&
+        Math.abs(candidate - a.l) < Math.abs(r.l - a.l),
+    );
+    if (!beside) r.l = candidate;
     r.motionSteer = dt ? (r.l - oldLane) / dt : 0;
     const acceleration =
-      cfg.acceleration * trait.acceleration * (hasPuncture(r) ? 0.65 : 1);
+      cfg.acceleration *
+      trait.acceleration *
+      (spec.accel / vehicle(0).accel) *
+      (hasPuncture(r) ? DAMAGE.accelFactor : 1);
     r.speed = clamp(
       oldSpeed + clamp(target - oldSpeed, -braking * dt, acceleration * dt),
       0,

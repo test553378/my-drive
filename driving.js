@@ -27,7 +27,7 @@ export const LAP = 1400,
   ROAD = 9.7,
   EDGE = ROAD - 1.75,
   TAU = Math.PI * 2,
-  WHEEL_RADIUS = 0.43;
+  WHEEL_RADIUS = vehicle(0).radius;
 export const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 export const center = (z) => trackPose("C01", z).x;
 export const slope = (z) => {
