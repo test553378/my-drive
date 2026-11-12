@@ -464,11 +464,11 @@ test("a full two-lap race renders through the lap seams, finishes and restarts",
   page,
 }) => {
   // SwiftShader can render below 2 fps; the simulation deliberately caps frame dt.
-  test.setTimeout(360000);
+  test.setTimeout(660000);
   await start(page);
   await expect
     .poll(async () => (await read(page)).runtime.phase, {
-      timeout: 300000,
+      timeout: 600000,
       intervals: [2000],
     })
     .toBe("finish");
