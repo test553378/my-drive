@@ -1,9 +1,30 @@
 import * as THREE from "three";
 import { buildCircuit } from "../graphics-lab/src/scene.js";
 import { trackPose } from "../tracks.js";
+import { roadGraph, edgePose } from "../roads.js";
+import { buildMissionWorld, branchClearance } from "./mission-world.js";
 import { mountainTerrain } from "./terrain.js";
 export function buildGameCircuit(textures, track) {
-  const circuit = buildCircuit(textures, track, { game: true }),
+  const graph = roadGraph(track.id);
+  const sceneryClear = (p, radius) => branchClearance(graph, p) > radius + 9;
+  const gaps = new Map();
+  const serviceGap = (d, side) => {
+    const key = Math.round(d / 2) * 2 + ":" + side;
+    if (!gaps.has(key))
+      gaps.set(
+        key,
+        branchClearance(
+          graph,
+          trackPose(track, d, side * (track.halfWidth + 1.5)),
+        ) < 8,
+      );
+    return gaps.get(key);
+  };
+  const circuit = buildCircuit(textures, track, {
+      game: true,
+      serviceGap,
+      sceneryClear,
+    }),
     root = circuit.root,
     box = new THREE.BoxGeometry(1, 1, 1),
     groups = new Map(),
@@ -30,8 +51,9 @@ export function buildGameCircuit(textures, track) {
     amber = new THREE.MeshBasicMaterial({ color: 0xf8c45a }),
     up = new THREE.Vector3(0, 1, 0);
   function place(d, o, y, w, h, l, mat, geometry = box) {
-    const p = trackPose(track, d, o),
-      q = new THREE.Quaternion().setFromAxisAngle(up, p.yaw),
+    const p = trackPose(track, d, o);
+    if (!sceneryClear(p, Math.max(w, l) / 2 + 3)) return;
+    const q = new THREE.Quaternion().setFromAxisAngle(up, p.yaw),
       m = new THREE.Matrix4();
     m.compose(
       new THREE.Vector3(p.x, p.y + y, p.z),
@@ -123,7 +145,15 @@ export function buildGameCircuit(textures, track) {
       );
     }
   } else if (track.theme === "mountain") {
-    const terrain = mountainTerrain(track);
+    const extraRoads = Object.values(graph.edges)
+      .filter((e) => !e.main)
+      .flatMap((e) => {
+        const n = Math.ceil(e.length / 6);
+        return Array.from({ length: n + 1 }, (_, i) =>
+          edgePose(e, (e.length * i) / n),
+        );
+      });
+    const terrain = mountainTerrain(track, extraRoads);
     root.add(terrain.mesh);
     const earth = new THREE.MeshStandardMaterial({
       color: 0x626e52,
@@ -213,5 +243,7 @@ export function buildGameCircuit(textures, track) {
     instance.receiveShadow = true;
     root.add(instance);
   }
-  return circuit;
+  const missions = buildMissionWorld(textures, graph);
+  root.add(missions.root);
+  return { ...circuit, graph, missions };
 }

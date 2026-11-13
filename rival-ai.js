@@ -100,7 +100,7 @@ export function tickRivals(player, rivals, dt) {
           model: r.model ?? player.model,
           self: r,
         })),
-      ...(player.phase === "race"
+      ...(player.phase === "race" && player.onMain !== false
         ? [
             {
               z: player.z,

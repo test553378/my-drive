@@ -1,3 +1,4 @@
+import { missionRace } from "./helpers/mission-driver.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { TRACKS, trackPose, pointAt, mapPath, cameraPose } from "../tracks.js";
@@ -25,6 +26,13 @@ test("four distinct closed routes have continuous position, heading and finite g
 test("all 32 vehicle/course pairs can finish two real laps and pass all checkpoints", () => {
   for (const t of TRACKS)
     for (let model = 0; model < 8; model++) {
+      if (model >= 5) {
+        const { s } = missionRace(model, t.id);
+        assert.equal(s.phase, "finish");
+        assert.equal(s.heroClear, true);
+        assert.equal(s.checkpointsPassed, 16);
+        continue;
+      }
       const s = createRace(0, model, {}, t.id);
       s.phase = "race";
       const rivals = createRivals(model);

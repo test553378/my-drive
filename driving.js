@@ -1,3 +1,5 @@
+import { initMissions, isWorking } from "./missions.js";
+import { advanceEmergency } from "./emergency-driving.js";
 import { createAI, tickRivals, curveTarget } from "./rival-ai.js";
 import { DAMAGE } from "./race-config.js";
 import {
@@ -94,11 +96,13 @@ export function createRace(
   s.seed = seed;
   s.obstacles = createObstacles(track.id, seed);
   s.pedestrians = createPedestrians(track.id, seed);
+  initMissions(s);
   return s;
 }
 export function activateBoost(s) {
   if (
     s.phase !== "race" ||
+    isWorking(s) ||
     s.charge < 60 ||
     s.boost > 0 ||
     s.brake ||
@@ -142,6 +146,7 @@ function progress(s, track, travel) {
   return null;
 }
 export function advance(s, rivals, seconds) {
+  if (s.missions) return advanceEmergency(s, rivals, seconds);
   const dt = clamp(Number.isFinite(seconds) ? seconds : 0, 0, 0.05),
     track = getTrack(s.courseId),
     spec = vehicle(s.model);

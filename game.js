@@ -1,7 +1,7 @@
 // Compatibility entry for an older cached HTML document. Current HTML loads
 // game.bundle.js; keep this public URL free of bare library imports.
 const previous = new URL(window.location.href);
-if (previous.searchParams.get("entry_update") === "7") {
+if (previous.searchParams.get("entry_update") === "8") {
   const loading = document.getElementById("asset-loading");
   if (loading) loading.hidden = true;
   window.raceDiagnostics?.failure(
@@ -11,7 +11,7 @@ if (previous.searchParams.get("entry_update") === "7") {
 } else {
   const destination = new URL("./index.html", import.meta.url);
   destination.search = previous.search;
-  destination.searchParams.set("entry_update", "7");
+  destination.searchParams.set("entry_update", "8");
   destination.hash = previous.hash;
   window.location.replace(destination.href);
 }

@@ -1783,3 +1783,141 @@ button,
 .start:disabled {
   opacity: 0.5;
 }
+
+/* Work targets stay aligned with the real 3D scene, including on Retina iPads. */
+.mission-hud {
+  position: absolute;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 370px);
+  min-width: 300px;
+  text-align: center;
+  background: #102132dc;
+  border: 1px solid #a2d7ef70;
+  border-radius: 14px;
+  padding: 8px 15px;
+  color: #fff;
+  pointer-events: none;
+  font-size: 16px;
+}
+#mission-count {
+  color: #ffe180;
+}
+#radio-message {
+  font-size: 14px;
+  margin-top: 4px;
+}
+.mission-guidance {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  font-weight: 700;
+}
+#mission-arrow {
+  font-size: 35px;
+}
+.uturn {
+  width: 92px;
+  min-height: 78px;
+  border-radius: 20px;
+  border: 2px solid #b6deff;
+  background: #224d6f;
+  color: white;
+  font-size: 34px;
+  font-weight: 800;
+  touch-action: none;
+  pointer-events: auto;
+}
+.uturn span {
+  display: block;
+  font-size: 13px;
+}
+.mission-working #left,
+.mission-working #right,
+.mission-working #brake,
+.mission-working .boost-zone {
+  visibility: hidden;
+  pointer-events: none;
+}
+.mission-targets {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.mission-target {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 84px;
+  height: 84px;
+  border: 3px dashed #fff9;
+  border-radius: 50%;
+  background: conic-gradient(#90e8ff90 var(--work-progress), #ffffff0d 0);
+  box-shadow: 0 0 0 4px #10213245;
+  pointer-events: auto;
+  touch-action: none;
+  color: white;
+}
+.mission-target span {
+  position: absolute;
+  bottom: -12px;
+  right: -8px;
+  font-size: 26px;
+  filter: drop-shadow(0 2px 3px #123);
+}
+.mission-target.holding {
+  border-style: solid;
+  border-color: #a7ecff;
+}
+#mini-map-branches {
+  stroke: #91cfb8;
+  stroke-width: 2;
+}
+#mini-map-heading {
+  fill: white;
+  stroke: #0e344c;
+  stroke-width: 0.6;
+}
+#mini-map-target {
+  fill: #ffe180;
+  stroke: #132e49;
+  stroke-width: 1;
+}
+@media (max-width: 690px) {
+  .mission-hud {
+    top: 80px;
+    min-width: 200px;
+    max-width: calc(100% - 205px);
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+  #radio-message {
+    font-size: 11px;
+  }
+  #mission-arrow {
+    font-size: 24px;
+  }
+  .mission-guidance {
+    min-height: 32px;
+  }
+  .uturn {
+    width: 65px;
+    min-height: 65px;
+    font-size: 27px;
+  }
+  .uturn span {
+    font-size: 10px;
+  }
+  .mission-target {
+    width: 72px;
+    height: 72px;
+  }
+}
+
+#mini-map-route {
+  stroke: #ffe180;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}

@@ -113,7 +113,7 @@ test("main-game PBR assets use the approved GLB and expose bounded GPU resources
 }) => {
   await ready(page, "./?quality=low");
   const r = await read(page);
-  expect(r.version).toBe("7.0.0");
+  expect(r.version).toBe("8.0.0");
   expect(r.runtime.assetModel).toBe("concept-mobile.glb");
   expect(r.runtime.assetBytes).toBeLessThan(20000000);
   expect(r.runtime.wheels).toHaveLength(4);
@@ -372,7 +372,7 @@ test("the complete versioned app shell is cached under the GitHub Pages subdirec
   await ready(page);
   await cached(page);
   const files = await page.evaluate(async () => {
-    const cache = await caches.open("bokuno-grand-race-v7-20261113b");
+    const cache = await caches.open("bokuno-grand-race-v8-20261113a");
     const keys = await cache.keys();
     return Promise.all(
       keys.map(async (r) => ({
