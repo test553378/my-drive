@@ -201,13 +201,14 @@ export function advanceEmergency(s, rivals, seconds) {
     if (s.road.joinedTravel >= 12) s.missions.active.stage = "DONE";
   }
   if (delta !== null && delta < 3.5 && s.v < 0.5) arriveMission(s);
-  s.motionSteer = working
-    ? 0
-    : clamp(
-        (s.offset - oldOffset) / Math.max(dt, 0.001),
-        -spec.turn,
-        spec.turn,
-      );
+  s.motionSteer =
+    working && s.missions.active.stage !== "SUSPECT_STOPPING"
+      ? 0
+      : clamp(
+          (s.offset - oldOffset) / Math.max(dt, 0.001),
+          -spec.turn,
+          spec.turn,
+        );
   s.roll += (-s.motionSteer * 0.013 - s.roll) * (1 - Math.exp(-dt * 7));
   s.pitch +=
     (clamp((-(s.v - oldSpeed) / Math.max(dt, 0.001)) * 0.0025, -0.06, 0.045) -

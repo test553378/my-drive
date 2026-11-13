@@ -273,3 +273,27 @@ test("T12/T14: emergency pedestrians impose the same ten-second penalty and keep
   advance(s, [], 0.05);
   assert.ok(other.elapsed > 0);
 });
+
+test("T09: captured cars smoothly pull into separate stopping lanes on every course and seed", () => {
+  for (const t of TRACKS)
+    for (const seed of [1, 17, 42, 12345, 98765]) {
+      const s = createRace(0, 5, {}, t.id, seed);
+      s.phase = "race";
+      driveUntil(s, [], (s) => s.missions.active?.stage === "SUSPECT_STOPPED", {
+        actions: false,
+      });
+      const m = s.missions.active,
+        p = playerPose(s),
+        q = edgePose(
+          roadGraph(t.id).edges["loop-" + m.site],
+          m.suspect.d,
+          m.suspect.offset,
+        );
+      assert.equal(m.stage, "SUSPECT_STOPPED");
+      assert.ok(Math.hypot(p.x - q.x, p.z - q.z) > 3.8, `${t.id}/${seed}`);
+      assert.ok(Math.abs(m.suspect.offset) < 2.2);
+      assert.equal(m.suspect.speed, 0);
+      assert.equal(s.v, 0);
+      assert.equal(s.missions.completed.length, 0);
+    }
+});

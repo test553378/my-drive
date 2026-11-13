@@ -168,6 +168,7 @@ export function dispatchMission(s, station) {
       d: p.escapeStart,
       speed: vehicle(s.model).top * 0.75,
       stopped: false,
+      offset: 0,
     },
     celebration: 0,
   };
@@ -223,10 +224,25 @@ export function tickMission(s, dt) {
       Math.hypot(p.x - q.x, p.z - q.z) < 10
     ) {
       m.stage = "SUSPECT_STOPPING";
+      // Only after capture, physically pull into separated stopping lanes.
+      m.parkingSide = Math.sign(s.offset * s.road.direction) || -1;
       s.boost = 0;
     }
   }
-  if (m.stage === "SUSPECT_STOPPING" && m.suspect.stopped && s.v < 0.05) {
+  if (m.stage === "SUSPECT_STOPPING") {
+    const blend = 1 - Math.exp(-dt * 4),
+      old = m.suspect.offset;
+    m.suspect.offset += (-m.parkingSide * 2.1 - m.suspect.offset) * blend;
+    m.suspect.motionSteer = (m.suspect.offset - old) / Math.max(dt, 0.001);
+    s.offset += (m.parkingSide * 2.1 * s.road.direction - s.offset) * blend;
+  }
+  if (
+    m.stage === "SUSPECT_STOPPING" &&
+    m.suspect.stopped &&
+    s.v < 0.05 &&
+    Math.abs(s.offset * s.road.direction - m.parkingSide * 2.1) < 0.08 &&
+    Math.abs(m.suspect.offset + m.parkingSide * 2.1) < 0.08
+  ) {
     m.stage = "SUSPECT_STOPPED";
     m.animation = 0;
   }

@@ -7,6 +7,8 @@ async function start(page, model) {
     .poll(async () => (await read(page)).frames, { timeout: 60000 })
     .toBeGreaterThan(2);
   await page.locator(`[data-model="${model}"]`).click();
+  // A repeatable ordinary seed keeps software-WebGL CI bounded; the pure
+  // matrix separately completes all 60 vehicle/course/seed combinations.
   await page.locator("#start").evaluate((button) =>
     button.addEventListener(
       "click",
@@ -14,15 +16,15 @@ async function start(page, model) {
         const original = Math.random;
         Math.random = () => {
           Math.random = original;
-          return 42 / 0x7fffffff;
+          return 12345 / 0x7fffffff;
         };
-        queueMicrotask(() => (Math.random = original));
       },
       { capture: true, once: true },
     ),
   );
   await page.locator("#start").click();
   await expect.poll(async () => (await read(page)).phase).toBe("race");
+  expect((await read(page)).seed).toBe(12345);
 }
 async function drive(page, until, { siren = true } = {}) {
   let held = null,
@@ -144,8 +146,9 @@ for (const [model, kind, stage] of [
       await page.locator("#start").click();
       r = await read(page);
       for (let i = 0; i < r.mission.active.fires.length; i++) {
-        const b = page.locator(`[data-target="fire-${i}"]`),
-          box = await b.boundingBox();
+        const b = page.locator(`[data-target="fire-${i}"]`);
+        await expect(b).toBeVisible();
+        const box = await b.boundingBox();
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
         await page.mouse.down();
         await expect

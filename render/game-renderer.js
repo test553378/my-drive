@@ -442,6 +442,7 @@ export class GameRenderer {
           suspectPose = edgePose(
             this.course.graph.edges["loop-" + m.site],
             m.suspect.d,
+            m.suspect.offset || 0,
           );
           const car = this.suspectCar;
           car.root.visible = true;
@@ -457,6 +458,8 @@ export class GameRenderer {
               phase: "race",
               wheelAngle: m.suspect.d / vehicle(0).radius,
               v: m.suspect.speed,
+              motionSteer:
+                m.stage === "SUSPECT_STOPPING" ? m.suspect.motionSteer : 0,
               time: state.time,
             },
             reduced,

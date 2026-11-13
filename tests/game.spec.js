@@ -63,7 +63,7 @@ test("real shaders link, draw a varied 3D scene, and use only same-origin assets
   expect(pixels.colors).toBeGreaterThan(8);
   expect(errors).toEqual([]);
   expect(
-    requests.every((url) => new URL(url).origin === "http://128.0.0.1:8765"),
+    requests.every((url) => new URL(url).origin === "http://127.0.0.1:8765"),
   ).toBeTruthy();
   await page.screenshot({ path: test.info().outputPath("menu.png") });
 });
