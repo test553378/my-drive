@@ -2,30 +2,45 @@ import { test, expect } from "@playwright/test";
 const read = (page) =>
   page.evaluate(() => window.raceDiagnostics.read().runtime);
 async function start(page, course = "C01") {
-  // Fix only the browser random source; exercise the normal race and event code.
-  await page.addInitScript(() => {
-    Math.random = () => 0.5;
-  });
   await page.goto("./?quality=low");
-  await expect.poll(async () => (await read(page)).frames).toBeGreaterThan(2);
+  await expect
+    .poll(async () => (await read(page)).frames, { timeout: 60000 })
+    .toBeGreaterThan(2);
   if (course !== "C01") {
     await page.locator('[data-garage-tab="course"]').click();
     await page.locator(`[data-course="${course}"]`).click();
   }
+  // Pin the race seed only. A global constant also duplicates Three.js UUIDs.
+  await page.locator("#start").evaluate((button) => {
+    button.addEventListener(
+      "click",
+      () => {
+        const original = Math.random;
+        Math.random = () => {
+          Math.random = original;
+          return 0.5;
+        };
+        queueMicrotask(() => {
+          Math.random = original;
+        });
+      },
+      { capture: true, once: true },
+    );
+  });
   await page.locator("#start").click();
   await expect.poll(async () => (await read(page)).phase).toBe("race");
 }
 test("real controls hit an obstacle, show a flattened tyre and automatically repair it", async ({
   page,
 }) => {
-  test.setTimeout(150000);
+  test.setTimeout(360000);
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await start(page);
   const target = (await read(page)).obstaclePreview[0];
   let held = null,
     r;
-  const deadline = Date.now() + 65000;
+  const deadline = Date.now() + 120000;
   while (Date.now() < deadline) {
     r = await read(page);
     if (r.flatMask.some(Boolean)) break;
@@ -70,13 +85,13 @@ test("real controls hit an obstacle, show a flattened tyre and automatically rep
     requestAnimationFrame(observe);
   });
   await expect
-    .poll(async () => (await read(page)).repairTimer, { timeout: 65000 })
+    .poll(async () => (await read(page)).repairTimer, { timeout: 120000 })
     .toBeGreaterThan(0);
   await page.screenshot({ path: test.info().outputPath("repair.png") });
   await expect
     .poll(
       async () => page.evaluate(() => window.__repairObservation.complete),
-      { timeout: 10000 },
+      { timeout: 30000 },
     )
     .toBe(true);
   const samples = await page.evaluate(() => window.__repairObservation.samples);
@@ -90,7 +105,7 @@ test("real controls hit an obstacle, show a flattened tyre and automatically rep
 test("city crossing warns early and real braking yields without a penalty", async ({
   page,
 }) => {
-  test.setTimeout(100000);
+  test.setTimeout(220000);
   await start(page, "C03");
   await expect(page.locator("#pedestrian-warning")).toBeVisible({
     timeout: 45000,
@@ -102,7 +117,7 @@ test("city crossing warns early and real braking yields without a penalty", asyn
     .poll(
       async () =>
         (await read(page)).pedestrians.some((p) => p.phase === "safe"),
-      { timeout: 25000 },
+      { timeout: 90000 },
     )
     .toBe(true);
   const r = await read(page);

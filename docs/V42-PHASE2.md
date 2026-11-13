@@ -1,5 +1,7 @@
 # Ver.4.2 Phase 2 — 1車両・1コースの画質試作
 
+> この記録はPhase 2時点のものです。ゲーム本体への統合後は [Ver.7の記録](V7-INTEGRATION.md) を参照してください。
+
 ## 確認用ページ
 
 公開先：<https://test553378.github.io/my-drive/graphics-lab/>

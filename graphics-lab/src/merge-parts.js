@@ -32,6 +32,13 @@ export function mergeRigidParts(root) {
       g.setIndex(
         new THREE.BufferAttribute(new Uint32Array(geometry.index.array), 1),
       );
+    else
+      g.setIndex(
+        Array.from(
+          { length: geometry.getAttribute("position").count },
+          (_, i) => i,
+        ),
+      );
     g.applyMatrix4(matrix);
     if (!groups.has(mesh.material)) groups.set(mesh.material, []);
     groups.get(mesh.material).push(g);

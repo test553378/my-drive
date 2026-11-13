@@ -8,7 +8,9 @@ export function raceRank(s, rivals) {
     rivals.filter((r) => {
       const time =
         r.finishTime ??
-        s.time + Math.max(0, total - r.z) / Math.max(1, r.speed || r.v || 1);
+        s.time +
+          (r.penaltyTime || 0) +
+          Math.max(0, total - r.z) / Math.max(1, r.speed || r.v || 1);
       return time < finish - 0.001;
     }).length
   );

@@ -194,3 +194,17 @@ test("rigid mesh merging preserves transformed geometry and reduces draw objects
   assert.equal(b.max.x, 2.5);
   assert.equal(root.children[0].geometry.index.count, 72);
 });
+test("rigid merging accepts indexed rounded panels together with non-indexed extruded wheel openings", () => {
+  const root = new THREE.Group(),
+    mat = new THREE.MeshStandardMaterial();
+  const a = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat),
+    b = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1).toNonIndexed(), mat);
+  b.position.x = 2;
+  root.add(a, b);
+  mergeRigidParts(root);
+  assert.equal(root.children.length, 1);
+  const bounds = new THREE.Box3().setFromObject(root);
+  assert.equal(bounds.min.x, -0.5);
+  assert.equal(bounds.max.x, 2.5);
+  assert.equal(root.children[0].geometry.index.count, 72);
+});

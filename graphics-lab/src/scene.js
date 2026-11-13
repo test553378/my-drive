@@ -2,7 +2,17 @@ import * as THREE from "three";
 import { getTrack, trackPose } from "../../tracks.js";
 const track = getTrack("C01");
 export { track };
-export function buildCircuit(textures) {
+export function buildCircuit(textures, route = track, { game = false } = {}) {
+  const track = route;
+  const pitGap = (d) =>
+    game &&
+    track.repairFractions.some(
+      (f) =>
+        Math.abs(
+          ((d - f * track.length + track.length * 1.5) % track.length) -
+            track.length / 2,
+        ) < 31,
+    );
   const root = new THREE.Group();
   root.name = "C01 — full closed circuit";
   const asphalt = new THREE.MeshStandardMaterial({
@@ -121,7 +131,11 @@ export function buildCircuit(textures) {
     for (const side of [-1, 1]) {
       const p = trackPose(track, d, side * (track.halfWidth + 0.12));
       quaternion.setFromAxisAngle(up, p.yaw);
-      matrix.compose(new THREE.Vector3(p.x, 0.035, p.z), quaternion, scale);
+      matrix.compose(
+        new THREE.Vector3(p.x, p.y + 0.035, p.z),
+        quaternion,
+        scale,
+      );
       curbs.setMatrixAt(index++, matrix);
       if (Math.floor(d / 2) % 2 === 0) curbRed.push(matrix.clone());
     }
@@ -162,6 +176,7 @@ export function buildCircuit(textures) {
     railIndices = [];
   for (const side of [-1, 1]) {
     for (let d = 0; d < track.length; d += 4) {
+      if (pitGap(d)) continue;
       const base = railPositions.length / 3;
       for (const dd of [d, Math.min(d + 4, track.length)])
         for (const h of [0.58, 0.69, 0.79, 0.9]) {
@@ -171,7 +186,7 @@ export function buildCircuit(textures) {
             side *
               (track.halfWidth + 1.4 + (h === 0.69 || h === 0.79 ? 0.07 : 0)),
           );
-          railPositions.push(p.x, h, p.z);
+          railPositions.push(p.x, p.y + h, p.z);
         }
       for (let k = 0; k < 3; k++) {
         const a = base + k;
@@ -179,16 +194,18 @@ export function buildCircuit(textures) {
       }
     }
     for (let d = 0; d < track.length; d += 8) {
+      if (pitGap(d)) continue;
       const p = trackPose(track, d, side * (track.halfWidth + 1.5));
       quaternion.setFromAxisAngle(up, p.yaw);
       matrix.compose(
-        new THREE.Vector3(p.x, 0.45, p.z),
+        new THREE.Vector3(p.x, p.y + 0.45, p.z),
         quaternion,
         new THREE.Vector3(0.12, 0.9, 0.16),
       );
       posts.setMatrixAt(index++, matrix);
     }
   }
+  posts.count = index;
   const railGeo = new THREE.BufferGeometry();
   railGeo.setAttribute(
     "position",
@@ -211,7 +228,7 @@ export function buildCircuit(textures) {
         0.12 * Math.sin(x * 0.047) * Math.cos(z * 0.039) +
         0.05 * Math.sin(x * 0.32 + z * 0.1);
     colors.push(v, v, v);
-    p.setY(i, -0.09);
+    p.setY(i, game && track.id === "C02" ? -4 : -0.09);
   }
   groundGeo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   groundGeo.computeVertexNormals();

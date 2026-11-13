@@ -1,27 +1,24 @@
 // A complete, versioned app shell. No remote resources or runtime data are cached.
-const CACHE_NAME = "bokuno-grand-race-v6-20261107b";
+const CACHE_NAME = "bokuno-grand-race-v7-20261113a";
 const FILES = [
   "index.html",
   "style.css",
   "diagnostics.js",
-  "game.js",
-  "driving.js",
-  "race-config.js",
-  "collisions.js",
-  "hazards.js",
-  "damage.js",
-  "pedestrians.js",
-  "race-metrics.js",
-  "actors.js",
-  "tracks.js",
-  "world.js",
-  "input.js",
-  "camera.js",
-  "garage.js",
-  "vehicle-config.js",
-  "vehicles.js",
+  "game.bundle.js",
+  "game-assets.json",
   "manifest.webmanifest",
   "icon.svg",
+  "graphics-lab/assets/concept-high.glb",
+  "graphics-lab/assets/concept-mobile.glb",
+  "graphics-lab/assets/concept-rival.glb",
+  "graphics-lab/assets/asphalt-color.jpg",
+  "graphics-lab/assets/asphalt-normal.jpg",
+  "graphics-lab/assets/asphalt-rough.jpg",
+  "graphics-lab/assets/sunset.hdr",
+  "graphics-lab/credits.html",
+  "graphics-lab/THREE-LICENSE.txt",
+  "graphics-lab/MESHOPT-LICENSE.txt",
+  "graphics-lab/CAR-SOURCE-LICENSE.md",
 ];
 const urls = FILES.map((file) => new URL(file, self.registration.scope).href);
 self.addEventListener("install", (event) => {

@@ -1,0 +1,185 @@
+{
+  "description": "Deterministic AI-only baseline; no player or hazards. Real races include obstacles, crossing stops and penalties.",
+  "results": [
+    {
+      "course": "C01",
+      "difficulty": "easy",
+      "model": "V01",
+      "laps": 2,
+      "stepSeconds": 0.05,
+      "obstacles": false,
+      "pedestrians": false,
+      "averageLapSeconds": [
+        39.32,
+        40.9,
+        40.42,
+        42.25
+      ]
+    },
+    {
+      "course": "C01",
+      "difficulty": "normal",
+      "model": "V01",
+      "laps": 2,
+      "stepSeconds": 0.05,
+      "obstacles": false,
+      "pedestrians": false,
+      "averageLapSeconds": [
+        31.82,
+        33.17,
+        32.72,
+        34.22
+      ]
+    },
+    {
+      "course": "C01",
+      "difficulty": "hard",
+      "model": "V01",
+      "laps": 2,
+      "stepSeconds": 0.05,
+      "obstacles": false,
+      "pedestrians": false,
+      "averageLapSeconds": [
+        31.12,
+        32.45,
+        32.02,
+        33.5
+      ]
+    },
+    {
+      "course": "C02",
+      "difficulty": "easy",
+      "model": "V01",
+      "laps": 2,
+      "stepSeconds": 0.05,
+      "obstacles": false,
+      "pedestrians": false,
+      "averageLapSeconds": [
+        50.05,
+        50.3,
+        50.5,
+        51.62
+      ]
+    },
+    {
+      "course": "C02",
+      "difficulty": "normal",
+      "model": "V01",
+      "laps": 2,
+      "stepSeconds": 0.05,
+      "obstacles": false,
+      "pedestrians": false,
+      "averageLapSeconds": [
+        40.52,
+        40.5,
+        40.97,
+        41.6
+      ]
+    },
+    {
+      "course": "C02",
+      "difficulty": "hard",
+      "model": "V01",
+      "laps": 2,
+      "stepSeconds": 0.05,
+      "obstacles": false,
+      "pedestrians": false,
+      "averageLapSeconds": [
+        37.92,
+        38.57,
+        39.15,
+        39.9
+      ]
+    },
+    {
+      "course": "C03",
+      "difficulty": "easy",
+      "model": "V01",
+      "laps": 2,
+      "stepSeconds": 0.05,
+      "obstacles": false,
+      "pedestrians": false,
+      "averageLapSeconds": [
+        49.4,
+        48.5,
+        49.1,
+        49.8
+      ]
+    },
+    {
+      "course": "C03",
+      "difficulty": "normal",
+      "model": "V01",
+      "laps": 2,
+      "stepSeconds": 0.05,
+      "obstacles": false,
+      "pedestrians": false,
+      "averageLapSeconds": [
+        40.27,
+        38.75,
+        39.72,
+        40.07
+      ]
+    },
+    {
+      "course": "C03",
+      "difficulty": "hard",
+      "model": "V01",
+      "laps": 2,
+      "stepSeconds": 0.05,
+      "obstacles": false,
+      "pedestrians": false,
+      "averageLapSeconds": [
+        36.72,
+        36.15,
+        37,
+        37.42
+      ]
+    },
+    {
+      "course": "C04",
+      "difficulty": "easy",
+      "model": "V01",
+      "laps": 2,
+      "stepSeconds": 0.05,
+      "obstacles": false,
+      "pedestrians": false,
+      "averageLapSeconds": [
+        56.37,
+        56.65,
+        57.02,
+        58
+      ]
+    },
+    {
+      "course": "C04",
+      "difficulty": "normal",
+      "model": "V01",
+      "laps": 2,
+      "stepSeconds": 0.05,
+      "obstacles": false,
+      "pedestrians": false,
+      "averageLapSeconds": [
+        45.5,
+        45.72,
+        46.12,
+        46.8
+      ]
+    },
+    {
+      "course": "C04",
+      "difficulty": "hard",
+      "model": "V01",
+      "laps": 2,
+      "stepSeconds": 0.05,
+      "obstacles": false,
+      "pedestrians": false,
+      "averageLapSeconds": [
+        42.77,
+        43.5,
+        44,
+        44.85
+      ]
+    }
+  ]
+}
