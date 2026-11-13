@@ -73,3 +73,50 @@ test("a failed real GLB request is visible and identifies the failing local file
   ).toBe(true);
   expect(report.runtime.frames).toBe(0);
 });
+
+test("an older HTML entry upgrades to the bundled game without resolving bare library imports", async ({
+  page,
+}) => {
+  const { readFile } = await import("node:fs/promises");
+  const html = (
+    await readFile(new URL("../index.html", import.meta.url), "utf8")
+  ).replace("game.bundle.js?v=7.0.0", "game.js?v=6.0.0");
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.route(
+    "**/my-drive/?legacy=1*",
+    (route) => route.fulfill({ contentType: "text/html", body: html }),
+    { times: 1 },
+  );
+  await page.goto("./?legacy=1&quality=low&adaptive=off");
+  await expect
+    .poll(async () => (await read(page)).frames, { timeout: 60000 })
+    .toBeGreaterThan(2);
+  expect(new URL(page.url()).pathname).toBe("/my-drive/index.html");
+  expect(new URL(page.url()).searchParams.get("entry_update")).toBe("7");
+  expect(errors).toEqual([]);
+  await expect(page.locator("#unsupported")).not.toBeVisible();
+});
+
+test("a repeatedly stale HTML entry stops after one upgrade and exposes a diagnostic", async ({
+  page,
+}) => {
+  const { readFile } = await import("node:fs/promises");
+  const html = (
+    await readFile(new URL("../index.html", import.meta.url), "utf8")
+  ).replace("game.bundle.js?v=7.0.0", "game.js?v=6.0.0");
+  const documents = [];
+  await page.route("**/my-drive/*", async (route) => {
+    if (route.request().isNavigationRequest()) {
+      documents.push(route.request().url());
+      return route.fulfill({ contentType: "text/html", body: html });
+    }
+    return route.continue();
+  });
+  await page.goto("./?legacy=1");
+  await expect(page.locator("#unsupported")).toBeVisible();
+  await expect(page.locator("#asset-loading")).not.toBeVisible();
+  const d = await page.evaluate(() => window.raceDiagnostics.read());
+  expect(d.failure.stage).toBe("legacy-entry-stale");
+  expect(documents).toHaveLength(2);
+});

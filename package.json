@@ -5,7 +5,7 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "test:e2e": "playwright test",
-    "check": "node --check game.js && node --check service-worker.js && prettier --check index.html style.css *.js tests && prettier --check graphics-lab/index.html graphics-lab/lab.css graphics-lab/credits.html graphics-lab/src scripts && prettier --check render",
+    "check": "node --check game.js && node --check game-main.js && node --check service-worker.js && prettier --check index.html style.css *.js tests && prettier --check graphics-lab/index.html graphics-lab/lab.css graphics-lab/credits.html graphics-lab/src scripts && prettier --check render",
     "format": "prettier --write index.html style.css *.js tests graphics-lab/index.html graphics-lab/lab.css graphics-lab/credits.html graphics-lab/src scripts",
     "build:graphics": "node scripts/build-graphics.mjs"
   },
