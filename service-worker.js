@@ -1,5 +1,5 @@
 // A complete, versioned app shell. No remote resources or runtime data are cached.
-const CACHE_NAME = "bokuno-grand-race-v7-20261113b";
+const CACHE_NAME = "bokuno-grand-race-v8-20261113a";
 const FILES = [
   "index.html",
   "style.css",

@@ -6,6 +6,7 @@ import { createActors } from "../actors.js";
 import { vehicle } from "../vehicle-config.js";
 import { getTrack, trackPose, cameraPose, overviewCamera } from "../tracks.js";
 import { QUALITY, fitBuffer } from "../graphics-lab/src/quality.js";
+import { playerPose, edgePose } from "../roads.js";
 import { buildGameCircuit } from "./circuit.js";
 
 export class GameRenderer {
@@ -198,6 +199,7 @@ export class GameRenderer {
       built = buildGameCircuit(this.assets.road, track);
     this.course = { ...built, track };
     this.world.add(built.root);
+    built.root.updateMatrixWorld(true);
     this.event("course-build", id);
   }
   prepare(setup, course = false) {
@@ -224,7 +226,10 @@ export class GameRenderer {
     this.rivalKey = key;
   }
   positioned(instance, state, player, reduced) {
-    const p = trackPose(this.course.track, state.z, state.offset ?? state.l),
+    const p =
+        player && state.road
+          ? playerPose(state)
+          : trackPose(this.course.track, state.z, state.offset ?? state.l),
       spec = vehicle(instance.setup.model);
     instance.root.position.set(
       p.x,
@@ -378,7 +383,24 @@ export class GameRenderer {
           h,
         );
         renderer.setScissorTest(true);
-        const pose = overviewCamera(this.course.track, w / h, yaw);
+        this.course.missions.frame(state, null);
+        if (this.suspectCar) this.suspectCar.root.visible = false;
+        const bounds = new THREE.Box3().setFromObject(
+          this.course.missions.root,
+        );
+        const old = this.course.track.bounds;
+        const expanded = {
+          ...old,
+          minX: Math.min(old.minX, bounds.min.x),
+          maxX: Math.max(old.maxX, bounds.max.x),
+          minZ: Math.min(old.minZ, bounds.min.z),
+          maxZ: Math.max(old.maxZ, bounds.max.z),
+        };
+        const pose = overviewCamera(
+          { ...this.course.track, bounds: expanded },
+          w / h,
+          yaw,
+        );
         cam.aspect = w / h;
         cam.fov = 40;
         cam.far = pose.far;
@@ -406,23 +428,81 @@ export class GameRenderer {
         this.events(state, pose);
         state.cameraOffset +=
           (state.offset - state.cameraOffset) * (1 - Math.exp(-dt * 3.9));
-        const camera = cameraPose(
-          this.course.track,
-          state.z,
-          state.cameraOffset,
-          Math.max(3.45, vehicle(state.model).roof + 2.1),
-          Math.max(10.5, vehicle(state.model).length * 2),
-        );
-        const eye = new THREE.Vector3(...camera.eye);
-        if (this.cameraInitial) cam.position.copy(eye);
+        const m = state.missions?.active;
+        let suspectPose = null;
+        if (m?.kind === "police") {
+          if (!this.suspectCar) {
+            this.suspectCar = this.factory.create(
+              { model: 0, color: 3, parts: { tyres: 1, body: 0, aero: 1 } },
+              QUALITY[this.quality].model,
+              true,
+            );
+            this.world.add(this.suspectCar.root);
+          }
+          suspectPose = edgePose(
+            this.course.graph.edges["loop-" + m.site],
+            m.suspect.d,
+          );
+          const car = this.suspectCar;
+          car.root.visible = true;
+          car.root.position.set(
+            suspectPose.x,
+            suspectPose.y + 0.012,
+            suspectPose.z,
+          );
+          car.root.rotation.set(suspectPose.pitch, suspectPose.yaw, 0, "YXZ");
+          this.factory.animate(
+            car,
+            {
+              phase: "race",
+              wheelAngle: m.suspect.d / vehicle(0).radius,
+              v: m.suspect.speed,
+              time: state.time,
+            },
+            reduced,
+          );
+        } else if (this.suspectCar) this.suspectCar.root.visible = false;
+        this.course.missions.frame(state, suspectPose);
+        const work = this.course.missions.workView(state, suspectPose);
+        this.workCamera = !!work;
+        const height = Math.max(3.45, vehicle(state.model).roof + 2.1),
+          back = Math.max(10.5, vehicle(state.model).length * 2);
+        const camera = state.road
+          ? {
+              eye: [
+                pose.x - pose.tx * back,
+                pose.y + height,
+                pose.z - pose.tz * back,
+              ],
+              aim: [
+                pose.x + pose.tx * 13,
+                pose.y + 1.15,
+                pose.z + pose.tz * 13,
+              ],
+            }
+          : cameraPose(
+              this.course.track,
+              state.z,
+              state.cameraOffset,
+              height,
+              back,
+            );
+        const eye = work ? work.eye : new THREE.Vector3(...camera.eye);
+        if (this.cameraInitial || work || this.wasWorkCamera !== !!work)
+          cam.position.copy(eye);
         else cam.position.lerp(eye, 1 - Math.exp(-dt * 6));
+        this.wasWorkCamera = !!work;
         this.cameraInitial = false;
         cam.aspect = this.canvas.width / this.canvas.height;
-        cam.fov =
-          62 +
-          (reduced ? 0 : Math.min(3, state.v / 20) + (state.boost > 0 ? 3 : 0));
+        cam.fov = work
+          ? work.fov
+          : 62 +
+            (reduced
+              ? 0
+              : Math.min(3, state.v / 20) + (state.boost > 0 ? 3 : 0));
         cam.far = 900;
-        cam.lookAt(...camera.aim);
+        if (work) cam.lookAt(work.aim);
+        else cam.lookAt(...camera.aim);
         target = this.player.root.position.clone();
       }
     }
@@ -445,9 +525,19 @@ export class GameRenderer {
           .clone()
           .add(new THREE.Vector3(0, 0.6, 0))
           .project(cam),
-        c = trackPose(this.course.track, state.z),
+        c = state.road
+          ? edgePose(
+              this.course.graph.edges[state.road.edge],
+              state.road.d,
+              0,
+              state.road.direction,
+            )
+          : trackPose(this.course.track, state.z),
         center = new THREE.Vector3(c.x, c.y + 0.6, c.z).project(cam);
       this.screen = { player: [p.x, p.y], laneCenter: [center.x, center.y] };
+      this.workTargets = this.course.missions
+        .targets(cam, innerWidth, innerHeight)
+        .map(({ point, ...t }) => t);
     }
   }
   lose() {
@@ -511,6 +601,8 @@ export class GameRenderer {
         angle: w.spin.rotation.x,
         center: w.outer.position.toArray(),
       })),
+      workCamera: this.workCamera || false,
+      workTargets: this.workTargets || [],
       contextLost: this.gl.isContextLost(),
     };
   }

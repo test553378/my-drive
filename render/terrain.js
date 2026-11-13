@@ -1,5 +1,5 @@
 import * as THREE from "three";
-export function mountainTerrain(track) {
+export function mountainTerrain(track, extraRoads = []) {
   const pad = 140,
     x0 = track.bounds.minX - pad,
     z0 = track.bounds.minZ - pad,
@@ -9,7 +9,7 @@ export function mountainTerrain(track) {
     nz = Math.ceil(depth / 8),
     dx = width / nx,
     dz = depth / nz,
-    points = track.table.filter((_, i) => i % 3 === 0),
+    points = [...track.table.filter((_, i) => i % 3 === 0), ...extraRoads],
     heights = new Float32Array((nx + 1) * (nz + 1)),
     positions = [],
     colors = [],

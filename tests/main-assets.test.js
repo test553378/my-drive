@@ -10,6 +10,8 @@ import { utilityBody } from "../render/vehicles.js";
 import { buildGameCircuit } from "../render/circuit.js";
 import { TRACKS, trackPose } from "../tracks.js";
 import { mountainTerrain } from "../render/terrain.js";
+import { createRace } from "../driving.js";
+import { edgePose } from "../roads.js";
 import { release } from "../render/mesh.js";
 test("mountain terrain remains below the entire elevated road and both shoulders", () => {
   const track = TRACKS[1],
@@ -128,6 +130,79 @@ test("every real closed route receives textured road geometry and reachable pit 
     for (const road of roads) {
       const p = road.geometry.getAttribute("position");
       for (let i = 0; i < p.count; i++) assert.ok(Number.isFinite(p.getY(i)));
+    }
+    release(c.root);
+  }
+});
+
+test("V8: all three flames share one fixed 3D view, roads face up, and mountain service roads stay above terrain", () => {
+  const textures = {
+    color: new THREE.Texture(),
+    normal: new THREE.Texture(),
+    rough: new THREE.Texture(),
+  };
+  for (const track of TRACKS) {
+    const c = buildGameCircuit(textures, track),
+      s = createRace(0, 7, {}, track.id, 42);
+    s.phase = "race";
+    for (let site = 0; site < 3; site++) {
+      const job = s.missions.plan[0];
+      s.missions.active = {
+        ...job,
+        site,
+        kind: "fire",
+        stage: "FIRE_ACTION",
+        fires: [2.5, 2.5, 2.5],
+        holding: -1,
+        pointer: null,
+      };
+      s.road.edge = "loop-" + site;
+      s.road.d = c.graph.sites[site].scene.d;
+      s.onMain = false;
+      c.root.updateMatrixWorld(true);
+      c.missions.frame(s, null);
+      const view = c.missions.workView(s, null),
+        camera = new THREE.PerspectiveCamera(view.fov, 1080 / 810, 0.1, 900);
+      camera.position.copy(view.eye);
+      camera.lookAt(view.aim);
+      camera.updateMatrixWorld();
+      const targets = c.missions.targets(camera, 1080, 810);
+      assert.equal(targets.length, 3);
+      assert.ok(
+        targets.every(
+          (t) => t.visible && t.x > 170 && t.x < 910 && t.y > 180 && t.y < 650,
+        ),
+      );
+      s.time += 2;
+      c.missions.frame(s, null);
+      assert.deepEqual(c.missions.workView(s, null), view);
+    }
+    c.missions.root.traverse((o) => {
+      if (o.geometry) {
+        const p = o.geometry.getAttribute("position");
+        for (let i = 0; i < p.count; i++)
+          assert.ok(
+            Number.isFinite(p.getX(i)) &&
+              Number.isFinite(p.getY(i)) &&
+              Number.isFinite(p.getZ(i)),
+          );
+        if (o.name.startsWith("service-road-")) {
+          const n = o.geometry.getAttribute("normal");
+          for (let i = 0; i < n.count; i++) assert.ok(n.getY(i) > 0.8);
+        }
+      }
+    });
+    if (track.id === "C02") {
+      const points = Object.values(c.graph.edges)
+          .filter((e) => !e.main)
+          .flatMap((e) =>
+            Array.from({ length: 40 }, (_, i) =>
+              edgePose(e, (e.length * i) / 39),
+            ),
+          ),
+        terrain = mountainTerrain(track, points);
+      for (const p of points) assert.ok(terrain.heightAt(p.x, p.z) < p.y - 0.2);
+      release(terrain.mesh);
     }
     release(c.root);
   }

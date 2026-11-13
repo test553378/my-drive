@@ -1,6 +1,6 @@
 {
   "name": "my-drive",
-  "version": "7.0.0",
+  "version": "8.0.0",
   "description": "子ども向けオリジナル3Dレース / static GitHub Pages",
   "scripts": {
     "test": "node --test tests/*.test.js",

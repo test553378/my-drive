@@ -2,7 +2,11 @@ import * as THREE from "three";
 import { getTrack, trackPose } from "../../tracks.js";
 const track = getTrack("C01");
 export { track };
-export function buildCircuit(textures, route = track, { game = false } = {}) {
+export function buildCircuit(
+  textures,
+  route = track,
+  { game = false, serviceGap = () => false, sceneryClear = () => true } = {},
+) {
   const track = route;
   const pitGap = (d) =>
     game &&
@@ -63,6 +67,7 @@ export function buildCircuit(textures, route = track, { game = false } = {}) {
     return mesh;
   };
   function box(d, o, y, w, h, l, mat) {
+    if (!sceneryClear(trackPose(track, d, o), Math.max(w, l) / 2 + 4)) return;
     const m = place(new THREE.Mesh(boxGeo, mat), d, o, y);
     m.scale.set(w, h, l);
     m.receiveShadow = true;
@@ -129,6 +134,7 @@ export function buildCircuit(textures, route = track, { game = false } = {}) {
   let index = 0;
   for (let d = 1; d < track.length; d += 2)
     for (const side of [-1, 1]) {
+      if (serviceGap(d, side)) continue;
       const p = trackPose(track, d, side * (track.halfWidth + 0.12));
       quaternion.setFromAxisAngle(up, p.yaw);
       matrix.compose(
@@ -139,6 +145,7 @@ export function buildCircuit(textures, route = track, { game = false } = {}) {
       curbs.setMatrixAt(index++, matrix);
       if (Math.floor(d / 2) % 2 === 0) curbRed.push(matrix.clone());
     }
+  curbs.count = index;
   curbs.receiveShadow = true;
   root.add(curbs);
   const alternating = new THREE.InstancedMesh(boxGeo, red, curbRed.length);
@@ -176,7 +183,7 @@ export function buildCircuit(textures, route = track, { game = false } = {}) {
     railIndices = [];
   for (const side of [-1, 1]) {
     for (let d = 0; d < track.length; d += 4) {
-      if (pitGap(d)) continue;
+      if (pitGap(d) || serviceGap(d, side)) continue;
       const base = railPositions.length / 3;
       for (const dd of [d, Math.min(d + 4, track.length)])
         for (const h of [0.58, 0.69, 0.79, 0.9]) {
@@ -194,7 +201,7 @@ export function buildCircuit(textures, route = track, { game = false } = {}) {
       }
     }
     for (let d = 0; d < track.length; d += 8) {
-      if (pitGap(d)) continue;
+      if (pitGap(d) || serviceGap(d, side)) continue;
       const p = trackPose(track, d, side * (track.halfWidth + 1.5));
       quaternion.setFromAxisAngle(up, p.yaw);
       matrix.compose(

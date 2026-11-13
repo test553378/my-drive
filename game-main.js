@@ -1,4 +1,5 @@
-import { createActors } from "./actors.js";
+import { clearMissionInput, isWorking } from "./missions.js";
+import { createMissionUI, missionSnapshot } from "./mission-ui.js";
 import { hasPuncture } from "./damage.js";
 import { raceRank } from "./race-metrics.js";
 import { TRACKS, getTrack, mapPath, mapPoint } from "./tracks.js";
@@ -76,7 +77,10 @@ async function boot() {
   ).join("");
   const setups = VEHICLES.map((_, i) => defaultSetup(i));
   const S = createRace(setups[0].color, 0, setups[0].parts);
-  const input = createInput(S);
+  const input = createInput(
+    S,
+    () => S.phase === "race" && !isWorking(S) && !S.road?.turnTimer,
+  );
   installGameGestures(document.body);
   let garageYaw = -0.24,
     previewDrag = null,
@@ -143,6 +147,9 @@ async function boot() {
 
   D.observe(() => ({
     phase: S.phase,
+    elapsed: S.time,
+    seed: S.seed,
+    ...missionSnapshot(S),
     rank: S.rank,
     distance: Math.round(S.z),
     offset: Number(S.offset.toFixed(2)),
@@ -294,9 +301,18 @@ async function boot() {
     engine.f.frequency.setTargetAtTime(150 + S.v * 14, audio.currentTime, 0.12);
     engine.g.gain.setTargetAtTime(active ? 0.019 : 0, audio.currentTime, 0.15);
   }
+  const missionUI = createMissionUI(S, {
+    clearControls,
+    muted: () => mute,
+    beep,
+    event: (code, detail) => D.event(code, detail),
+  });
   function metric() {
     const track = getTrack(S.courseId);
-    S.lap = Math.min(2, 1 + Math.floor(S.z / track.length));
+    S.lap = Math.min(
+      2,
+      1 + (S.ledger ? S.ledger.laps : Math.floor(S.z / track.length)),
+    );
     S.rank = raceRank(S, ai);
     $("lap").textContent = `${S.lap} / 2`;
     $("rank").textContent = `${S.rank} / 5`;
@@ -336,6 +352,7 @@ async function boot() {
       (p) => p.phase === "warning" || p.phase === "crossing",
     );
     $("pedestrian-warning").hidden = !warning;
+    missionUI.update();
     $("forced-stop").hidden = S.stopTimer <= 0;
     $("forced-stop").textContent =
       `✋ あんぜん かくにん ${Math.ceil(S.stopTimer)}`;
@@ -348,6 +365,7 @@ async function boot() {
   }
   function clearControls() {
     input.clear();
+    clearMissionInput(S);
     previewDrag = null;
     for (const id of ["left", "right"]) $(id).classList.remove("is-down");
   }
@@ -390,10 +408,13 @@ async function boot() {
     clearControls();
     $("modal").classList.remove("hidden");
     $("kicker").textContent = "🏁 FINISH";
-    $("title").innerHTML =
-      S.rank === 1 ? "🏆 <em>WINNER!</em>" : "🏁 <em>FINISH!</em>";
+    $("title").innerHTML = S.heroClear
+      ? "🌟 <em>HERO CLEAR!</em>"
+      : S.rank === 1
+        ? "🏆 <em>WINNER!</em>"
+        : "🏁 <em>FINISH!</em>";
     $("subtitle").textContent =
-      `${S.rank}い / 5だい　 ${(S.time + S.penaltyTime).toFixed(1)}びょう（ペナルティ +${S.penaltyTime}）`;
+      `${S.heroClear ? "おしごと 2 / 2 ・ 2しゅう たっせい！　" : ""}${S.rank}い / 5だい　 ${(S.time + S.penaltyTime).toFixed(1)}びょう（ペナルティ +${S.penaltyTime}）`;
     $("choose").textContent = "すきな くるまを えらんでね";
     $("start").textContent = "↻ もういちど レース";
     $("instructions").textContent =
@@ -406,6 +427,7 @@ async function boot() {
   function pause() {
     if (S.phase === "race" || S.phase === "countdown") {
       pausedPhase = S.phase;
+      missionUI.cancelSpeech();
       $("modal").classList.add("paused");
       S.phase = "pause";
       clearControls();
@@ -515,6 +537,7 @@ async function boot() {
       });
       // A local diagnostic boundary: readPixels must run before the browser
       // presents/discards the non-preserved WebGL drawing buffer.
+      missionUI.draw(inGarage() ? [] : graphics.workTargets);
       canvas.dispatchEvent(new Event("race-frame"));
       screenPosition = graphics.screen || screenPosition;
       if ($("toast").classList.contains("show") && timestamp > toastEnd)
@@ -700,6 +723,7 @@ async function boot() {
   });
   $("sound").addEventListener("click", () => {
     mute = !mute;
+    if (mute) missionUI.cancelSpeech();
     $("sound").textContent = mute ? "🔇" : "🔊";
     initAudio();
   });

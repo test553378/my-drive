@@ -65,10 +65,23 @@
       <div class="mini-map">
         <svg viewBox="0 0 100 100" aria-label="コース全体図と自車位置">
           <path id="mini-map-path" />
+          <path id="mini-map-branches" />
+          <path id="mini-map-route" />
           <g id="mini-map-pits"></g>
+          <g id="mini-map-hospitals"></g>
+          <circle id="mini-map-target" r="3" />
+          <path id="mini-map-heading" d="M0,-6 L3,2 L0,0 L-3,2Z" />
           <circle id="mini-map-car" r="4" /></svg
         ><span id="race-course"></span>
       </div>
+      <div id="mission-hud" class="mission-hud" hidden>
+        <strong id="mission-count">🌟 おしごと 0 / 2</strong>
+        <div id="radio-message" aria-live="polite"></div>
+        <div class="mission-guidance">
+          <b id="mission-arrow">⬆</b><span id="mission-instruction"></span>
+        </div>
+      </div>
+      <div id="mission-targets" class="mission-targets"></div>
       <div class="event-hud">
         <div class="penalty-badge">
           ⏱ <span id="penalty-time">+0びょう</span>
@@ -99,6 +112,9 @@
               <div class="meter" id="boostmeter"></div></button
             ><span class="boost-txt">はやく はしる</span>
           </div>
+          <button class="uturn" id="uturn" aria-label="ユーターン" hidden>
+            ↶<span>ユーターン</span>
+          </button>
           <button
             class="siren"
             id="siren"
@@ -452,7 +468,7 @@
         このゲームにはJavaScriptが必要です。Safariの設定を確認してください。
       </div></noscript
     >
-    <script src="./diagnostics.js?v=7.0.0"></script>
-    <script type="module" src="./game.bundle.js?v=7.0.0"></script>
+    <script src="./diagnostics.js?v=8.0.0"></script>
+    <script type="module" src="./game.bundle.js?v=8.0.0"></script>
   </body>
 </html>

@@ -24,7 +24,7 @@ export function createPedestrians(courseId, seed = 12345) {
     );
   return out;
 }
-export function tickPedestrians(s, dt) {
+export function tickPedestrians(s, dt, { activate = true } = {}) {
   const t = getTrack(s.courseId),
     spec = vehicle(s.model);
   let event = null;
@@ -36,6 +36,7 @@ export function tickPedestrians(s, dt) {
         12,
       lead = minLead + Math.max(55, s.v * 2.2);
     if (p.phase === "waiting") {
+      if (!activate) continue;
       p.offset = p.side * (t.halfWidth + 2);
       if (!p.enabled) {
         p.phase = "skipped";
