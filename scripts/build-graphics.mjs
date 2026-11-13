@@ -34,7 +34,7 @@ console.log(`Self-hosted bundle: ${bytes.length} bytes`);
 
 const beforeBundle = await readFile("game.bundle.js").catch(() => null),
   beforeManifest = await readFile("game-assets.json").catch(() => null);
-await build(await bundleConfig("game.js", "game.bundle.js"));
+await build(await bundleConfig("game-main.js", "game.bundle.js"));
 const bundle = await readFile("game.bundle.js"),
   files = {};
 for (const [name, info] of Object.entries(manifest.files))
