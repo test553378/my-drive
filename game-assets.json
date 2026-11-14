@@ -43,8 +43,8 @@
   },
   "bundle": {
     "path": "game.bundle.js",
-    "bytes": 830573,
-    "sha256": "59858df6aa6b536ef91a48cc8f039f2e4bf1600b4d5f327f74a94e92d75c949a"
+    "bytes": 830593,
+    "sha256": "755d87c888a93c98f903553f39cfc3378c70ac8e46061d4c579dc2211ad284ec"
   },
   "models": [
     {

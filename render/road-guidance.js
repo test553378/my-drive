@@ -105,14 +105,11 @@ export function buildRoadGuidance() {
     arrows.count = points.length;
     line.visible = points.length > 1;
     if (uturn.visible) {
-      const p = edgePose(
-        raceRoadGraph(s).edges[s.road.edge],
-        s.road.d,
-        0,
-        s.road.direction,
-      );
-      uturn.position.set(p.x + p.tx * 8, p.y + 0.08, p.z + p.tz * 8);
-      uturn.rotation.y = p.yaw;
+      const road = s.road,
+        edge = raceRoadGraph(s).edges[road.edge],
+        p = edgePose(edge, road.d + 8 * road.direction, 0, road.direction);
+      uturn.position.set(p.x, p.y + 0.14, p.z);
+      uturn.rotation.set(p.pitch || 0, p.yaw, 0, "YXZ");
     }
     for (let i = 0; i < points.length; i++) {
       const p = points[i],

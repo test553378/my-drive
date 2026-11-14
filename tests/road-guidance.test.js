@@ -272,3 +272,42 @@ test("T02/T08: opposite input cancels a pending choice and a miss is recoverable
     assert.equal(JSON.stringify(s.missions.plan), jobs);
   }
 });
+
+test("T01/T08: the ground U-turn stays above a sloping mountain road rather than disappearing under it", () => {
+  const s = createRace(0, 7, {}, "C02", 12345);
+  s.phase = "race";
+  driveUntil(s, [], (s) => !!s.missions.active, { actions: false });
+  onMain(s, 400);
+  assert.ok(missionNavigation(s).uTurn);
+  const guide = buildRoadGuidance();
+  guide.update(s);
+  guide.root.updateMatrixWorld(true);
+  const marker = guide.root.getObjectByName("Ground U-turn");
+  assert.ok(marker.visible);
+  let minimum = Infinity;
+  marker.traverse((o) => {
+    if (!o.isMesh) return;
+    const positions = o.geometry.getAttribute("position");
+    for (let i = 0; i < positions.count; i++) {
+      const v = new THREE.Vector3()
+        .fromBufferAttribute(positions, i)
+        .applyMatrix4(o.matrixWorld);
+      let best = Infinity,
+        y = 0;
+      for (let d = 398; d < 420; d += 0.15) {
+        const q = trackPose("C02", d),
+          dist = Math.hypot(v.x - q.x, v.z - q.z);
+        if (dist < best) {
+          best = dist;
+          y = q.y;
+        }
+      }
+      minimum = Math.min(minimum, v.y - y);
+    }
+  });
+  assert.ok(
+    minimum > 0.025,
+    `ground marker must remain visible above pavement: ${minimum}`,
+  );
+  release(guide.root);
+});
