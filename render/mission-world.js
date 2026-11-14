@@ -1,6 +1,7 @@
 import * as THREE from "three";
+import { trackPose } from "../tracks.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { edgePose, playerPose } from "../roads.js";
+import { edgePose, playerPose, edgeWidth } from "../roads.js";
 const Y = new THREE.Vector3(0, 1, 0);
 const lerp = (a, b, t) =>
   new THREE.Vector3(a.x, a.y, a.z).lerp(new THREE.Vector3(b.x, b.y, b.z), t);
@@ -13,14 +14,15 @@ export function branchClearance(graph, p) {
         .filter((e) => !e.main)
         .flatMap((e) => {
           const count = Math.ceil(e.length / 6);
-          return Array.from({ length: count + 1 }, (_, i) =>
-            edgePose(e, (e.length * i) / count),
-          );
+          return Array.from({ length: count + 1 }, (_, i) => ({
+            ...edgePose(e, (e.length * i) / count),
+            width: edgeWidth(e, (e.length * i) / count),
+          }));
         }),
     );
   let best = Infinity;
   for (const q of corridorCache.get(graph))
-    best = Math.min(best, Math.hypot(p.x - q.x, p.z - q.z));
+    best = Math.min(best, Math.hypot(p.x - q.x, p.z - q.z) - q.width);
   return best;
 }
 export function buildMissionWorld(textures, graph) {
@@ -60,21 +62,71 @@ export function buildMissionWorld(textures, graph) {
     parent.add(o);
     return o;
   }
-  function ribbon(edge, left, right, lower, material) {
+  function ribbon(edge, left, right, lower, material, marking = false) {
     const count = Math.ceil(edge.length / 3),
       pos = [],
       uv = [],
       ix = [];
     for (let i = 0; i <= count; i++)
       for (const off of [left, right]) {
-        const p = edgePose(edge, (edge.length * i) / count, off);
+        const d = (edge.length * i) / count,
+          w = edgeWidth(edge, d),
+          raw = typeof off === "function" ? off(w) : off;
+        let o = raw;
+        const center = edgePose(edge, d);
+        if (material === asphalt && Number.isFinite(center.mainStation)) {
+          const q = trackPose(graph.track, center.mainStation),
+            normalOffset = -(center.x - q.x) * q.tz + (center.z - q.z) * q.tx,
+            alignment = Math.max(0.5, center.tx * q.tx + center.tz * q.tz),
+            side = graph.sites.find((s) => s.index === edge.site).side;
+          // Draw the union at coplanar mouths rather than two flickering asphalt surfaces.
+          o =
+            side > 0
+              ? Math.min(
+                  w,
+                  Math.max(
+                    raw,
+                    (graph.track.halfWidth - normalOffset - 0.06) / alignment,
+                  ),
+                )
+              : Math.max(
+                  -w,
+                  Math.min(
+                    raw,
+                    (-graph.track.halfWidth - normalOffset + 0.06) / alignment,
+                  ),
+                );
+        }
+        const p = edgePose(edge, d, o);
         pos.push(p.x, p.y + lower, p.z);
-        uv.push((off + edge.width) / 2, (edge.length * i) / count / 2);
+        uv.push((o + w) / 2, (p.mainStation ?? (edge.uvStation || 0) + d) / 2);
       }
     for (let i = 0; i < count; i++) {
+      const d = (edge.length * (i + 0.5)) / count,
+        p = edgePose(edge, d);
+      if (Number.isFinite(p.mainStation)) {
+        const q = trackPose(graph.track, p.mainStation);
+        if (marking) {
+          const off =
+              typeof left === "function" ? left(edgeWidth(edge, d)) : left,
+            v = edgePose(edge, d, off);
+          if (Math.hypot(v.x - q.x, v.z - q.z) < graph.track.halfWidth + 0.2)
+            continue;
+        }
+      }
       const n = i * 2;
       ix.push(n, n + 1, n + 2, n + 1, n + 3, n + 2);
     }
+    // Omitted mouth markings must not leave unused zero-normal vertices.
+    const used = [...new Set(ix)],
+      remap = new Map(used.map((old, i) => [old, i])),
+      packed = used.flatMap((i) => pos.slice(i * 3, i * 3 + 3)),
+      packedUV = used.flatMap((i) => uv.slice(i * 2, i * 2 + 2));
+    pos.length = 0;
+    pos.push(...packed);
+    uv.length = 0;
+    uv.push(...packedUV);
+    for (let i = 0; i < ix.length; i++) ix[i] = remap.get(ix[i]);
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
@@ -87,15 +139,28 @@ export function buildMissionWorld(textures, graph) {
   }
   for (const e of Object.values(graph.edges))
     if (!e.main) {
-      ribbon(e, -e.width - 2, e.width + 2, -0.13, stone);
-      ribbon(e, -e.width, e.width, 0.016, asphalt);
+      ribbon(
+        e,
+        (w) => -w - 2,
+        (w) => w + 2,
+        -0.13,
+        stone,
+      );
+      ribbon(
+        e,
+        (w) => -w,
+        (w) => w,
+        0.003,
+        asphalt,
+      );
       for (const sign of [-1, 1])
         ribbon(
           e,
-          sign * (e.width - 0.5) - 0.08,
-          sign * (e.width - 0.5) + 0.08,
+          (w) => sign * (w - 0.5) - 0.08,
+          (w) => sign * (w - 0.5) + 0.08,
           0.025,
           white,
+          true,
         );
       // Elevated mountain roads have actual supports, rather than floating ribbons.
       if (graph.courseId === "C02")
@@ -104,9 +169,14 @@ export function buildMissionWorld(textures, graph) {
           box(root, p.x, (p.y - 4) / 2, p.z, 0.8, p.y + 4, 0.8, stone);
         }
     }
-  const sites = graph.sites.map((site) => {
+  const sites = [];
+  for (const site of graph.sites.filter(
+    (site) => graph.kind !== "police" && graph.sceneSites.includes(site.index),
+  )) {
     const p = edgePose(graph.edges[site.scene.edge], site.scene.d),
       g = new THREE.Group();
+    g.name =
+      (graph.kind === "fire" ? "fire-site-" : "rescue-site-") + site.index;
     g.position.set(p.x - p.tz * 18, p.y, p.z + p.tx * 18);
     g.rotation.y = p.yaw - Math.PI / 2;
     root.add(g);
@@ -122,7 +192,7 @@ export function buildMissionWorld(textures, graph) {
       for (const y of [2.5, 5.5])
         if (x || y > 3) box(g, x, y, -5.1, 2, 1.5, 0.12, glass);
     const flames = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < (graph.kind === "fire" ? 3 : 0); i++) {
       const fire = new THREE.Group();
       fire.position.set((i - 1) * 3.8, 2.9 + (i === 1 ? 2.8 : 0), -5.6);
       for (const [radius, height, color] of [
@@ -161,12 +231,14 @@ export function buildMissionWorld(textures, graph) {
     for (const side of [-1, 1])
       box(pad, side * 4.2, 0.025, 0, 0.15, 0.03, 11, white);
     root.add(pad);
-    return { group: g, flames, pad, pose: p };
-  });
-  const hospitals = graph.hospitals.map((h) => {
+    sites[site.index] = { group: g, flames, pad, pose: p };
+  }
+  const hospitals = [];
+  for (const h of graph.hospitals) {
     const p = edgePose(graph.edges[h.edge], h.d),
       g = new THREE.Group(),
       color = h.id === "hospital-0" ? blue : pink;
+    g.name = h.id;
     g.position.set(p.x - p.tz * 19, p.y, p.z + p.tx * 19);
     g.rotation.y = p.yaw - Math.PI / 2;
     root.add(g);
@@ -189,8 +261,8 @@ export function buildMissionWorld(textures, graph) {
     pad.rotation.y = p.yaw;
     box(pad, 0, 0, 0, 9, 0.03, 12, color);
     root.add(pad);
-    return { group: g, pose: p };
-  });
+    hospitals[h.index] = { group: g, pose: p };
+  }
   // Batch static architecture; moving actors and flames keep independent transforms.
   root.updateMatrixWorld(true);
   const batches = new Map();
@@ -279,7 +351,7 @@ export function buildMissionWorld(textures, graph) {
     water.visible = spray.visible = false;
     for (const a of [crew, patient, officer, driver]) a.root.visible = false;
     for (const [i, site] of sites.entries())
-      for (const [j, fire] of site.flames.entries()) {
+      for (const [j, fire] of (site?.flames || []).entries()) {
         const showing = m?.kind === "fire" && m.site === i && m.fires[j] > 0;
         fire.visible = showing;
         if (showing) {
@@ -304,8 +376,9 @@ export function buildMissionWorld(textures, graph) {
         m.stage === "HANDOFF" ||
         (m.stage === "SUCCESS" && m.kind === "ambulance"),
       location = hospital ? hospitals[m.hospital] : sites[m.site],
-      focus = location.group.position.clone();
-    const rp = location.pose,
+      focus =
+        location?.group.position.clone() || new THREE.Vector3(p.x, p.y, p.z);
+    const rp = location?.pose || p,
       front = {
         x: focus.x + rp.tz * 6,
         y: rp.y + 0.05,

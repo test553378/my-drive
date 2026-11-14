@@ -1,4 +1,10 @@
-import { roadGraph, edgePose, navigateRoad } from "./roads.js";
+import {
+  roadGraph,
+  raceRoadGraph,
+  roadKind,
+  edgePose,
+  navigateRoad,
+} from "./roads.js";
 import { vehicle } from "./vehicle-config.js";
 import { seededRandom } from "./hazards.js";
 export const MISSION_KINDS = { 5: "police", 6: "ambulance", 7: "fire" };
@@ -96,12 +102,20 @@ export function interactMission(s) {
 }
 export function missionTarget(s) {
   const m = s.missions?.active;
-  if (!m) return null;
-  const g = roadGraph(s.courseId),
-    site = g.sites[m.site];
+  if (
+    !m ||
+    m.kind !== roadKind(s.model) ||
+    s.phase === "menu" ||
+    s.phase === "finish"
+  )
+    return null;
+  const g = raceRoadGraph(s),
+    site = g.sites.find((site) => site.index === m.site);
   if (m.stage === "RETURN_TO_TRACK" || m.stage === "DONE") {
+    const currentSite =
+      g.sites.find((site) => site.index === g.edges[s.road.edge]?.site) || site;
     const edge = Object.values(g.edges).find(
-      (e) => e.main && e.from === site.merge,
+      (e) => e.main && e.from === currentSite.merge,
     );
     return { edge: edge.id, d: 12, direction: 1, label: "ほんせんへ もどろう" };
   }
@@ -110,7 +124,7 @@ export function missionTarget(s) {
     m.stage === "HANDOFF" ||
     (m.stage === "AUTO_STOP" && m.stopRole === "hospital")
   )
-    return { ...g.hospitals[m.hospital], label: g.hospitals[m.hospital].label };
+    return { ...g.hospitals.find((h) => h.index === m.hospital) };
   if (m.kind === "police")
     return {
       edge: "loop-" + m.site,
@@ -127,8 +141,15 @@ export function missionTarget(s) {
 }
 export function missionNavigation(s) {
   const m = s.missions?.active;
+  if (
+    !m ||
+    m.kind !== roadKind(s.model) ||
+    s.phase === "menu" ||
+    s.phase === "finish"
+  )
+    return null;
   if (m?.stage === "CHASE_LOOP" && s.road.edge === "loop-" + m.site) {
-    const e = roadGraph(s.courseId).edges[s.road.edge];
+    const e = raceRoadGraph(s).edges[s.road.edge];
     return {
       uTurn: s.road.direction < 0,
       turn: "straight",
@@ -139,7 +160,7 @@ export function missionNavigation(s) {
     };
   }
   if (m?.stage === "RETURN_TO_TRACK" && s.onMain) {
-    const e = roadGraph(s.courseId).edges[s.road.edge];
+    const e = raceRoadGraph(s).edges[s.road.edge];
     return {
       uTurn: s.road.direction < 0,
       turn: "straight",
@@ -203,7 +224,7 @@ export function tickMission(s, dt) {
         0,
         m.suspect.speed - vehicle(s.model).brake * dt,
       );
-    const e = roadGraph(s.courseId).edges["loop-" + m.site];
+    const e = raceRoadGraph(s).edges["loop-" + m.site];
     m.suspect.d = (m.suspect.d + m.suspect.speed * dt) % e.length;
     if (m.stage === "SUSPECT_STOPPING" && m.suspect.speed === 0)
       m.suspect.stopped = true;
@@ -215,7 +236,7 @@ export function tickMission(s, dt) {
   )
     m.stage = "CHASE_LOOP";
   if (m.stage === "CHASE_LOOP" && s.siren && s.road.edge === "loop-" + m.site) {
-    const e = roadGraph(s.courseId).edges[s.road.edge],
+    const e = raceRoadGraph(s).edges[s.road.edge],
       p = edgePose(e, s.road.d, s.offset, s.road.direction),
       q = edgePose(e, m.suspect.d),
       gap = Math.abs(s.road.d - m.suspect.d);
@@ -285,7 +306,7 @@ export function autoStopTarget(s) {
   )
     return null;
   const target = missionTarget(s),
-    e = roadGraph(s.courseId).edges[s.road.edge];
+    e = raceRoadGraph(s).edges[s.road.edge];
   if (target.edge !== e.id) return null;
   let delta = (target.d - s.road.d) * s.road.direction;
   if (e.closed) delta = ((delta % e.length) + e.length) % e.length;

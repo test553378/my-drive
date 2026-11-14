@@ -1,5 +1,5 @@
 {
-  "version": "8.0.0",
+  "version": "8.0.1",
   "engine": {
     "name": "Three.js",
     "version": "0.187.0"
@@ -43,8 +43,8 @@
   },
   "bundle": {
     "path": "game.bundle.js",
-    "bytes": 818398,
-    "sha256": "14a384160ac170aa1f68c46e7aab179bfe17c0ab6dd211633959fb659ccebcc0"
+    "bytes": 830573,
+    "sha256": "59858df6aa6b536ef91a48cc8f039f2e4bf1600b4d5f327f74a94e92d75c949a"
   },
   "models": [
     {
