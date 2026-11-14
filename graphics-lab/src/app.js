@@ -104,6 +104,7 @@ function fail(code, error) {
   event(code, String(error?.message || error));
   state.ready = false;
   state.paused = true;
+  syncGestures();
   stop();
   $("loading").hidden = true;
   $("failure").hidden = false;
@@ -135,7 +136,16 @@ const input = createInput(
 input.bind($("left"), "steerL");
 input.bind($("right"), "steerR");
 input.bind($("brake"), "brake");
-installGameGestures(document.body);
+// The shared input API is opt-in. Keep prototype driving scoped to its canvas
+// and controls; inspection gestures and native dialog pan/pinch stay separate.
+const gestures = [canvas, $("driving-controls")].map((root) =>
+  installGameGestures(root, { onInterrupt: clear }),
+);
+function syncGestures() {
+  const active =
+    state.ready && state.mode === "drive" && !state.paused && !changing;
+  for (const guard of gestures) guard.setActive(active);
+}
 function progress(label) {
   const files = [
       "asphalt-color.jpg",
@@ -308,6 +318,7 @@ function configure() {
 async function switchQuality(name, automatic = false) {
   if (changing || !state.ready || name === state.quality) return;
   changing = true;
+  syncGestures();
   clear();
   const previousModel = QUALITY[state.quality].model;
   state.quality = name;
@@ -339,6 +350,7 @@ async function switchQuality(name, automatic = false) {
     fail("quality-load-failed", e);
   } finally {
     changing = false;
+    syncGestures();
     previous = 0;
   }
 }
@@ -387,6 +399,7 @@ function setMode(mode) {
   clear();
   state.mode = mode;
   state.paused = false;
+  syncGestures();
   $("resume").hidden = true;
   orbit.enabled = mode === "inspect";
   document.body.classList.toggle("driving", mode === "drive");
@@ -422,6 +435,7 @@ function chase(dt) {
 }
 function pause(reason) {
   state.paused = true;
+  syncGestures();
   clear();
   previous = 0;
   event("paused", reason);
@@ -439,6 +453,7 @@ function stop() {
 function render(t) {
   raf = 0;
   if (!state.ready || document.hidden) return;
+  syncGestures();
   try {
     const raw = previous ? (t - previous) / 1000 : 0,
       dt = Math.min(0.1, raw);
@@ -623,6 +638,7 @@ $("loading-details").addEventListener("click", () => $("details").click());
 $("resume").addEventListener("click", () => {
   if (!state.ready) return;
   state.paused = false;
+  syncGestures();
   $("resume").hidden = true;
   previous = 0;
   schedule();

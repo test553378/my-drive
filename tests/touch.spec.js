@@ -32,6 +32,18 @@ test("game gestures suppress double-tap without disabling ordinary selection or 
       page.evaluate(() => window.raceDiagnostics.read().runtime.phase),
     )
     .toBe("race");
+  await expect(page.locator("#play-surface")).toHaveClass(
+    /game-gestures-active/,
+  );
+  for (const selector of ["#world", ".hud", ".controls", "#pause", "#sound"])
+    await expect(page.locator(selector).first()).toHaveCSS(
+      "touch-action",
+      "none",
+    );
+  const report = await page.evaluate(() => window.raceDiagnostics.read());
+  expect(report.runtime.inputGestures.active).toBe(true);
+  expect(report.viewport.scale).toBe(1);
+  expect(report.runtime.cameraFov).toBeGreaterThan(0);
   const right = page.locator("#right");
   for (const id of [31, 32])
     await right.dispatchEvent("pointerdown", {
@@ -83,4 +95,36 @@ test("game gestures suppress double-tap without disabling ordinary selection or 
     await page.evaluate(() => window.raceDiagnostics.read().runtime.brake),
   ).toBe(false);
   await expect(right).not.toHaveClass(/is-down/);
+  await right.dispatchEvent("pointerdown", {
+    pointerId: 51,
+    pointerType: "touch",
+  });
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("orientationchange")),
+  );
+  expect(
+    await page.evaluate(
+      () => window.raceDiagnostics.read().runtime.steering[1],
+    ),
+  ).toBe(false);
+  await expect(right).not.toHaveClass(/is-down/);
+  await page.locator("#pause").tap();
+  await expect(page.locator("#play-surface")).not.toHaveClass(
+    /game-gestures-active/,
+  );
+  await page.locator("#start").tap();
+  await expect(page.locator("#play-surface")).toHaveClass(
+    /game-gestures-active/,
+  );
+  await page.locator("#help").tap();
+  await expect(page.locator("#diagnostics")).toBeVisible();
+  await expect(page.locator("#play-surface")).not.toHaveClass(
+    /game-gestures-active/,
+  );
+  expect(
+    await page.locator("#diagnostic-report").evaluate((el) => {
+      const css = getComputedStyle(el);
+      return css.userSelect || css.webkitUserSelect;
+    }),
+  ).toBe("text");
 });

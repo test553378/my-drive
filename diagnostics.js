@@ -3,7 +3,7 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const report = {
-    version: "8.0.1",
+    version: "8.0.2",
     stage: "loading",
     failure: null,
     events: [],
@@ -19,7 +19,20 @@
     report.events = report.events.slice(-20);
   }
   function snapshot() {
-    return { ...report, runtime: runtime() };
+    return {
+      ...report,
+      viewport: {
+        layoutWidth: innerWidth,
+        layoutHeight: innerHeight,
+        devicePixelRatio: window.devicePixelRatio,
+        scale: window.visualViewport?.scale ?? 1,
+        width: window.visualViewport?.width ?? innerWidth,
+        height: window.visualViewport?.height ?? innerHeight,
+        offsetLeft: window.visualViewport?.offsetLeft ?? 0,
+        offsetTop: window.visualViewport?.offsetTop ?? 0,
+      },
+      runtime: runtime(),
+    };
   }
   function refresh() {
     $("diagnostic-report").value = JSON.stringify(snapshot(), null, 2);

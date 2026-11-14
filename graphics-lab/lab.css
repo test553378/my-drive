@@ -541,3 +541,8 @@ body.driving .camera-views [data-camera] {
 #drive-hud {
   bottom: 240px;
 }
+
+#driving-controls.game-gestures-active,
+#driving-controls.game-gestures-active * {
+  touch-action: none;
+}

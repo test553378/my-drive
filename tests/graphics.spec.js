@@ -103,6 +103,14 @@ test("the real controls drive in 3D, roll and steer wheels, hold position after 
   test.setTimeout(180000);
   await ready(page, "low");
   await page.locator("#drive").click();
+  await expect(page.locator("#driving-controls")).toHaveClass(
+    /game-gestures-active/,
+  );
+  await expect(page.locator("#driving-controls")).toHaveCSS(
+    "touch-action",
+    "none",
+  );
+  await expect(page.locator("body")).not.toHaveClass(/game-gestures-active/);
   await page.keyboard.down("ArrowRight");
   await expect
     .poll(async () => (await read(page)).offset, { timeout: 30000 })
@@ -136,12 +144,18 @@ test("the real controls drive in 3D, roll and steer wheels, hold position after 
     .locator("#brake")
     .dispatchEvent("pointercancel", { pointerId: 32, pointerType: "touch" });
   await page.locator("#details").click();
+  await expect(page.locator("#driving-controls")).not.toHaveClass(
+    /game-gestures-active/,
+  );
   const paused = (await read(page)).distance;
   await page.waitForTimeout(400);
   expect((await read(page)).distance).toBe(paused);
   await page.locator('[data-close="measure"]').click();
   await expect(page.locator("#resume")).toBeVisible();
   await page.locator("#resume").click();
+  await expect(page.locator("#driving-controls")).toHaveClass(
+    /game-gestures-active/,
+  );
   await expect
     .poll(async () => (await read(page)).distance, { timeout: 30000 })
     .toBeGreaterThan(paused);

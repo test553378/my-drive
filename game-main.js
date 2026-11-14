@@ -81,7 +81,20 @@ async function boot() {
     S,
     () => S.phase === "race" && !isWorking(S) && !S.road?.turnTimer,
   );
-  installGameGestures(document.body);
+  const gestures = installGameGestures($("play-surface"), {
+    onInterrupt: () => clearControls(),
+  });
+  function syncGameGestures() {
+    gestures.setActive(
+      graphicsReady &&
+        !document.hidden &&
+        (S.phase === "race" || S.phase === "countdown") &&
+        $("modal").classList.contains("hidden") &&
+        $("diagnostics").classList.contains("hidden") &&
+        !$("unsupported").classList.contains("visible") &&
+        $("asset-loading").hidden,
+    );
+  }
   let garageYaw = -0.24,
     previewDrag = null,
     lastView = null;
@@ -147,6 +160,7 @@ async function boot() {
 
   D.observe(() => ({
     phase: S.phase,
+    inputGestures: gestures.snapshot(),
     elapsed: S.time,
     seed: S.seed,
     ...missionSnapshot(S),
@@ -308,6 +322,7 @@ async function boot() {
     event: (code, detail) => D.event(code, detail),
   });
   function metric() {
+    syncGameGestures();
     const track = getTrack(S.courseId);
     S.lap = Math.min(
       2,
@@ -367,6 +382,9 @@ async function boot() {
     input.clear();
     clearMissionInput(S);
     previewDrag = null;
+    document
+      .querySelectorAll(".mission-target.holding")
+      .forEach((button) => button.classList.remove("holding"));
     for (const id of ["left", "right"]) $(id).classList.remove("is-down");
   }
   function reset() {
@@ -402,6 +420,7 @@ async function boot() {
   }
   function finish() {
     S.phase = "finish";
+    gestures.setActive(false);
     document.body.classList.add("in-garage");
     $("modal").classList.remove("paused");
     refreshGarage();
@@ -426,6 +445,7 @@ async function boot() {
   let pausedPhase = "race";
   function pause() {
     if (S.phase === "race" || S.phase === "countdown") {
+      gestures.setActive(false);
       pausedPhase = S.phase;
       missionUI.cancelSpeech();
       $("modal").classList.add("paused");
@@ -573,6 +593,7 @@ async function boot() {
       name === graphics.quality
     )
       return;
+    gestures.setActive(false);
     changing = true;
     graphicsReady = false;
     clearControls();
@@ -598,6 +619,7 @@ async function boot() {
     } finally {
       changing = false;
       loading(false);
+      syncGameGestures();
     }
   }
   for (const button of document.querySelectorAll("[data-color]"))
@@ -696,6 +718,7 @@ async function boot() {
   $("garage-return").addEventListener("click", () => {
     clearControls();
     S.phase = "menu";
+    gestures.setActive(false);
     S.v = 0;
     S.boost = 0;
     S.siren = false;
