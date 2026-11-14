@@ -80,7 +80,7 @@ test("an older HTML entry upgrades to the bundled game without resolving bare li
   const { readFile } = await import("node:fs/promises");
   const html = (
     await readFile(new URL("../index.html", import.meta.url), "utf8")
-  ).replace("game.bundle.js?v=8.0.0", "game.js?v=6.0.0");
+  ).replace("game.bundle.js?v=8.0.1", "game.js?v=6.0.0");
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.route(
@@ -104,7 +104,7 @@ test("a repeatedly stale HTML entry stops after one upgrade and exposes a diagno
   const { readFile } = await import("node:fs/promises");
   const html = (
     await readFile(new URL("../index.html", import.meta.url), "utf8")
-  ).replace("game.bundle.js?v=8.0.0", "game.js?v=6.0.0");
+  ).replace("game.bundle.js?v=8.0.1", "game.js?v=6.0.0");
   const documents = [];
   await page.route("**/my-drive/*", async (route) => {
     if (route.request().isNavigationRequest()) {

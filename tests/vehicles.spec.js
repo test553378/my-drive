@@ -33,6 +33,32 @@ test("all eight vehicle models preview with the correct wheels and can start a r
         page.evaluate(() => window.raceDiagnostics.read().runtime.phase),
       )
       .toBe("race");
+    const kind = [null, null, null, null, null, "police", "ambulance", "fire"][
+      model
+    ];
+    await expect
+      .poll(async () =>
+        page.evaluate(
+          () => window.raceDiagnostics.read().runtime.activeRoads.kind,
+        ),
+      )
+      .toBe(kind);
+    const roads = await page.evaluate(
+      () => window.raceDiagnostics.read().runtime.activeRoads,
+    );
+    expect(roads.sceneSites.length).toBe(model >= 5 ? 2 : 0);
+    const serviceCount = roads.edges.filter(
+      (e) => !e.startsWith("main-"),
+    ).length;
+    if (model === 6) {
+      expect(serviceCount).toBeGreaterThanOrEqual(6);
+      expect(serviceCount).toBeLessThanOrEqual(9);
+    } else expect(serviceCount).toBe(model >= 5 ? 6 : 0);
+    if (model !== 6) expect(roads.hospitals).toEqual([]);
+    if (model < 5)
+      expect(await page.locator("#mini-map-branches").getAttribute("d")).toBe(
+        "",
+      );
     if (model !== 7) {
       await page.locator("#pause").click();
       await page.locator("#garage-return").click();

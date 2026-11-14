@@ -1,3 +1,4 @@
+import { raceRoadGraph } from "../roads.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -142,8 +143,12 @@ test("V8: all three flames share one fixed 3D view, roads face up, and mountain 
     rough: new THREE.Texture(),
   };
   for (const track of TRACKS) {
-    const c = buildGameCircuit(textures, track),
-      s = createRace(0, 7, {}, track.id, 42);
+    const s = createRace(0, 7, {}, track.id, 42);
+    s.missions.plan = [0, 1, 2].map((site) => ({
+      ...s.missions.plan[0],
+      site,
+    }));
+    const c = buildGameCircuit(textures, track, raceRoadGraph(s));
     s.phase = "race";
     for (let site = 0; site < 3; site++) {
       const job = s.missions.plan[0];

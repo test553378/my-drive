@@ -1,7 +1,10 @@
 import { getTrack } from "./tracks.js";
 import { vehicle } from "./vehicle-config.js";
 import {
-  roadGraph,
+  raceRoadGraph,
+  mainContact,
+  edgeWidth,
+  rememberTurn,
   edgePose,
   mainStation,
   moveRoad,
@@ -13,6 +16,7 @@ import {
   autoStopTarget,
   arriveMission,
   isWorking,
+  missionNavigation,
 } from "./missions.js";
 import {
   hasPuncture,
@@ -55,12 +59,12 @@ function ledgerMove(s, edge, from, to, direction) {
     );
   s.checkpointsPassed = l.laps * 8 + l.next - 1;
 }
-function onPhysicalMain(s, fn) {
-  if (!s.onMain) return null;
+function onPhysicalMain(s, fn, point = mainContact(s)) {
+  if (!point) return null;
   const z = s.z,
     offset = s.offset;
-  s.z = s.ledger.laps * getTrack(s.courseId).length + mainStation(s);
-  s.offset *= s.road.direction;
+  s.z = s.ledger.laps * getTrack(s.courseId).length + point.station;
+  s.offset = point.offset;
   const result = fn();
   s.z = z;
   s.offset = offset;
@@ -76,6 +80,7 @@ export function advanceEmergency(s, rivals, seconds) {
     return null;
   }
   if (s.phase !== "race") return null;
+  const oldContact = mainContact(s);
   const oldStation = mainStation(s),
     oldSpeed = s.v,
     oldOffset = s.offset,
@@ -84,7 +89,7 @@ export function advanceEmergency(s, rivals, seconds) {
   s.boost = Math.max(0, s.boost - dt);
   s.charge = Math.min(100, s.charge + dt * 12);
   let event = tickCondition(s, dt);
-  if (s.onMain)
+  if (oldContact)
     onPhysicalMain(s, () => {
       event = tickPedestrians(s, dt) || event;
     });
@@ -93,7 +98,7 @@ export function advanceEmergency(s, rivals, seconds) {
     event = "mission-dispatch";
   tickMission(s, dt);
   const turning = tickUTurn(s, dt),
-    edge = roadGraph(s.courseId).edges[s.road.edge],
+    edge = raceRoadGraph(s).edges[s.road.edge],
     pose = edgePose(edge, s.road.d, 0, s.road.direction),
     working = isWorking(s),
     delta = autoStopTarget(s);
@@ -146,6 +151,7 @@ export function advanceEmergency(s, rivals, seconds) {
         spec.turn *
         (0.5 + (s.v / spec.top) * 0.5) *
         (hasPuncture(s) ? DAMAGE.handlingFactor : 1);
+    if (dir || (s.steerL && s.steerR)) rememberTurn(s, missionNavigation(s));
     s.steerV = dir
       ? s.steerV + (want - s.steerV) * (1 - Math.exp(-dt * 10))
       : 0;
@@ -183,7 +189,7 @@ export function advanceEmergency(s, rivals, seconds) {
         s.pitExit);
     const limit = expanded
       ? track.halfWidth + 4.5
-      : edge.width - spec.width / 2 - 0.35;
+      : edgeWidth(edge, s.road.d) - spec.width / 2 - 0.35;
     s.offset = clamp(s.offset, -limit, limit);
   } else {
     s.steerV = 0;
@@ -216,10 +222,14 @@ export function advanceEmergency(s, rivals, seconds) {
     (1 - Math.exp(-dt * 7));
   s.wheelAngle = (s.wheelAngle + (s.v * dt) / spec.radius) % (Math.PI * 2);
   s.bounce = Math.sin(s.road.d * 0.85) * Math.min(0.018, s.v * 0.0004);
-  if (s.onMain && oldRoad === s.road.edge)
+  const contact = mainContact(s);
+  if (oldContact && contact)
     onPhysicalMain(s, () => {
-      const previous =
-        s.ledger.laps * track.length + (oldStation ?? mainStation(s));
+      const delta =
+        ((contact.station - oldContact.station + track.length * 1.5) %
+          track.length) -
+        track.length / 2;
+      const previous = s.z - delta;
       for (const object of s.obstacles) {
         if (object.hit) continue;
         const c = sweptContact(previous, s.z, s.offset, s.model, object);
@@ -230,24 +240,29 @@ export function advanceEmergency(s, rivals, seconds) {
         }
       }
       event = contactPedestrian(s, previous) || event;
-      if (enterRepair(s, track)) event = "repair-start";
+      if (s.onMain && enterRepair(s, track)) event = "repair-start";
     });
-  const physicalZ = s.onMain
-    ? s.ledger.laps * track.length + mainStation(s)
+  const physicalZ = contact
+    ? s.ledger.laps * track.length + contact.station
     : s.z;
   tickRivals(
-    { ...s, z: physicalZ, offset: s.offset * s.road.direction },
+    {
+      ...s,
+      onMain: !!contact,
+      z: physicalZ,
+      offset: contact?.offset ?? s.offset * s.road.direction,
+    },
     rivals,
     dt,
   );
-  if (s.onMain && !working)
+  if (contact && !working)
     for (const r of rivals) {
       const gap =
         ((r.z - physicalZ + track.length * 1.5) % track.length) -
         track.length / 2;
       if (
         Math.abs(gap) < (spec.length + 4.86) * 0.4 &&
-        Math.abs(r.l - s.offset * s.road.direction) < spec.width / 2 + 1.05 &&
+        Math.abs(r.l - contact.offset) < spec.width / 2 + 1.05 &&
         s.time - s.hit > 2 &&
         r.finishTime === undefined
       ) {

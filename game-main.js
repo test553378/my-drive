@@ -385,7 +385,7 @@ async function boot() {
       ),
       { phase: "countdown" },
     );
-    graphics.setCourse(S.courseId);
+    graphics.setCourse(S.courseId, S);
     document.body.classList.remove("in-garage");
     $("modal").classList.remove("paused");
     canvas.setAttribute("aria-label", "3Dスーパーカーレース");

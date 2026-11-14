@@ -3,7 +3,7 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const report = {
-    version: "8.0.0",
+    version: "8.0.1",
     stage: "loading",
     failure: null,
     events: [],

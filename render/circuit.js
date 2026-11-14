@@ -1,12 +1,16 @@
 import * as THREE from "three";
 import { buildCircuit } from "../graphics-lab/src/scene.js";
 import { trackPose } from "../tracks.js";
-import { roadGraph, edgePose } from "../roads.js";
+import { raceRoadGraph, edgePose } from "../roads.js";
 import { buildMissionWorld, branchClearance } from "./mission-world.js";
+import { buildRoadGuidance } from "./road-guidance.js";
 import { mountainTerrain } from "./terrain.js";
-export function buildGameCircuit(textures, track) {
-  const graph = roadGraph(track.id);
-  const sceneryClear = (p, radius) => branchClearance(graph, p) > radius + 9;
+export function buildGameCircuit(
+  textures,
+  track,
+  graph = raceRoadGraph({ courseId: track.id }),
+) {
+  const sceneryClear = (p, radius) => branchClearance(graph, p) > radius + 3;
   const gaps = new Map();
   const serviceGap = (d, side) => {
     const key = Math.round(d / 2) * 2 + ":" + side;
@@ -16,7 +20,7 @@ export function buildGameCircuit(textures, track) {
         branchClearance(
           graph,
           trackPose(track, d, side * (track.halfWidth + 1.5)),
-        ) < 8,
+        ) < 2,
       );
     return gaps.get(key);
   };
@@ -245,5 +249,7 @@ export function buildGameCircuit(textures, track) {
   }
   const missions = buildMissionWorld(textures, graph);
   root.add(missions.root);
-  return { ...circuit, graph, missions };
+  const guidance = buildRoadGuidance();
+  root.add(guidance.root);
+  return { ...circuit, graph, missions, guidance };
 }

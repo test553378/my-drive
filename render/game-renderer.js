@@ -6,7 +6,7 @@ import { createActors } from "../actors.js";
 import { vehicle } from "../vehicle-config.js";
 import { getTrack, trackPose, cameraPose, overviewCamera } from "../tracks.js";
 import { QUALITY, fitBuffer } from "../graphics-lab/src/quality.js";
-import { playerPose, edgePose } from "../roads.js";
+import { playerPose, edgePose, raceRoadGraph } from "../roads.js";
 import { buildGameCircuit } from "./circuit.js";
 
 export class GameRenderer {
@@ -189,14 +189,15 @@ export class GameRenderer {
     this.factory.dispose(previous);
     this.cameraInitial = true;
   }
-  setCourse(id) {
-    if (this.course?.track.id === id) return;
+  setCourse(id, state = { courseId: id }) {
+    const graph = raceRoadGraph(state);
+    if (this.course?.graph === graph) return;
     if (this.course) {
       this.course.root.removeFromParent();
       release(this.course.root);
     }
     const track = getTrack(id),
-      built = buildGameCircuit(this.assets.road, track);
+      built = buildGameCircuit(this.assets.road, track, graph);
     this.course = { ...built, track };
     this.world.add(built.root);
     built.root.updateMatrixWorld(true);
@@ -204,7 +205,13 @@ export class GameRenderer {
   }
   prepare(setup, course = false) {
     this.setVehicle(setup);
-    if (course) this.setCourse(setup.courseId);
+    if (course)
+      this.setCourse(
+        setup.courseId,
+        setup.phase === "menu" || setup.phase === "finish"
+          ? { ...setup, missions: null, road: null }
+          : setup,
+      );
   }
   ensureRivals(state, rivals) {
     const key = JSON.stringify([state.model, rivals.map((r) => r.c)]);
@@ -360,7 +367,11 @@ export class GameRenderer {
       cam.lookAt(0, Math.max(0.65, spec.roof * 0.43), 0);
       target = new THREE.Vector3();
     } else {
-      this.setCourse(state.courseId);
+      const courseState = garage
+        ? { ...state, missions: null, road: null }
+        : state;
+      this.setCourse(state.courseId, courseState);
+      this.course.guidance.update(courseState);
       active = this.world;
       if (garage) {
         this.player.root.visible = false;
@@ -383,7 +394,7 @@ export class GameRenderer {
           h,
         );
         renderer.setScissorTest(true);
-        this.course.missions.frame(state, null);
+        this.course.missions.frame(courseState, null);
         if (this.suspectCar) this.suspectCar.root.visible = false;
         const bounds = new THREE.Box3().setFromObject(
           this.course.missions.root,
@@ -595,6 +606,16 @@ export class GameRenderer {
       modelCacheSize: this.factory.templates.size,
       bufferSize: [this.canvas.width, this.canvas.height],
       sceneCourse: this.course?.track.id,
+      activeRoads: this.course
+        ? {
+            key: this.course.graph.key,
+            kind: this.course.graph.kind,
+            edges: Object.keys(this.course.graph.edges),
+            sceneSites: this.course.graph.sceneSites,
+            hospitals: this.course.graph.hospitals.map((h) => h.index),
+          }
+        : null,
+      roadGuidance: this.course?.guidance.stats(),
       assetBytes: this.assets.loadedBytes,
       assetModel: this.player?.modelName,
       rendererResources: { ...this.renderer.info.memory },

@@ -74,7 +74,7 @@ export function buildCircuit(
     root.add(m);
     return m;
   }
-  function ribbon(a, b, left, right, y, mat) {
+  function ribbon(a, b, left, right, y, mat, skip = () => false) {
     const count = Math.max(1, Math.ceil((b - a) / 2)),
       pos = [],
       uv = [],
@@ -88,6 +88,7 @@ export function buildCircuit(
       }
     }
     for (let i = 0; i < count; i++) {
+      if (skip(a + ((b - a) * (i + 0.5)) / count)) continue;
       const n = i * 2;
       ix.push(n, n + 1, n + 2, n + 1, n + 3, n + 2);
     }
@@ -119,6 +120,7 @@ export function buildCircuit(
         side * (track.halfWidth - 0.35) + 0.07,
         0.009,
         white,
+        (station) => serviceGap(station, side),
       );
   }
   const curbs = new THREE.InstancedMesh(

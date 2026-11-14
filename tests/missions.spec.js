@@ -48,10 +48,13 @@ async function drive(page, until, { siren = true } = {}) {
       await page.locator("#siren").click();
     const n = r.mission?.navigation,
       key =
-        n && !n.uTurn && n.remaining < 28
-          ? n.turn === "right"
+        n &&
+        !n.uTurn &&
+        ((r.onMain && n.upcoming?.distance < 140 && !r.road.intent) ||
+          (!r.onMain && n.remaining < 28))
+          ? (r.onMain ? n.upcoming.turn : n.turn) === "right"
             ? "ArrowRight"
-            : n.turn === "left"
+            : (r.onMain ? n.upcoming.turn : n.turn) === "left"
               ? "ArrowLeft"
               : null
           : null;
@@ -86,6 +89,24 @@ for (const [model, kind, stage] of [
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await start(page, model);
+    const before = await drive(
+      page,
+      (r) => r.mission?.navigation?.upcoming?.distance < 130,
+    );
+    expect(before.activeRoads.kind).toBe(kind);
+    expect(before.activeRoads.sceneSites.length).toBe(2);
+    expect(before.roadGuidance.visible).toBe(true);
+    expect(before.roadGuidance.count).toBeGreaterThan(5);
+    expect(before.roadGuidance.edges.some((e) => e.startsWith("access-"))).toBe(
+      true,
+    );
+    expect(before.activeRoads.hospitals.length).toBe(
+      kind === "ambulance"
+        ? new Set(before.mission.plan.map((p) => p.hospital)).size
+        : 0,
+    );
+    await page.screenshot({ path: test.info().outputPath(`${kind}-fork.png`) });
+    const graphKey = before.activeRoads.key;
     await drive(page, (r) => r.mission?.active?.stage === stage);
     let r = await read(page);
     expect(r.onMain).toBe(false);
@@ -193,6 +214,7 @@ for (const [model, kind, stage] of [
     await drive(page, (r) => !r.mission.active);
     await expect(page.locator("#left")).toBeVisible();
     expect((await read(page)).onMain).toBe(true);
+    expect((await read(page)).activeRoads.key).toBe(graphKey);
     expect(errors).toEqual([]);
   });
 }

@@ -7,7 +7,8 @@ import {
   interactMission,
 } from "./missions.js";
 import {
-  roadGraph,
+  raceRoadGraph,
+  navigationSegments,
   graphMap,
   playerPose,
   edgePose,
@@ -27,9 +28,17 @@ const instructions = {
   RETURN_TO_TRACK: "🏁 やじるしで ほんせんへ もどろう",
 };
 export function missionSnapshot(s) {
+  const g = raceRoadGraph(s);
   const m = s.missions?.active,
     nav = missionNavigation(s);
   return {
+    activeRoads: {
+      key: g.key,
+      kind: g.kind,
+      edges: Object.keys(g.edges),
+      sceneSites: g.sceneSites,
+      hospitals: g.hospitals.map((h) => h.index),
+    },
     road: s.road ? { ...s.road } : null,
     onMain: s.onMain,
     ledger: s.ledger ? { ...s.ledger } : null,
@@ -47,6 +56,7 @@ export function missionSnapshot(s) {
                 turn: nav.turn,
                 remaining: nav.remaining,
                 cost: nav.cost,
+                upcoming: nav.upcoming,
                 target: missionTarget(s),
               }
             : null,
@@ -120,9 +130,9 @@ export function createMissionUI(s, { clearControls, muted, beep, event }) {
       $("radio-message").textContent = "🏁 はしりながら おしごと しよう";
     const arrow = nav?.uTurn
       ? "↶"
-      : nav?.turn === "left" && nav.remaining < 65
+      : nav?.upcoming?.turn === "left" && nav.upcoming.distance < 160
         ? "⬅"
-        : nav?.turn === "right" && nav.remaining < 65
+        : nav?.upcoming?.turn === "right" && nav.upcoming.distance < 160
           ? "➡"
           : "⬆";
     $("mission-arrow").textContent = working
@@ -136,12 +146,12 @@ export function createMissionUI(s, { clearControls, muted, beep, event }) {
       working || m?.stage === "RETURN_TO_TRACK"
         ? instructions[m.stage] || ""
         : m
-          ? `${missionTarget(s)?.label || ""}${nav?.uTurn ? "　ユーターン しよう" : nav?.remaining < 65 && nav.turn !== "straight" ? "　" + (nav.turn === "right" ? "みぎへ" : "ひだりへ") : ""}`
+          ? `${missionTarget(s)?.label || ""}${nav?.uTurn ? "　ユーターン しよう" : nav?.upcoming?.distance < 160 ? "　" + (nav.upcoming.turn === "right" ? "みぎへ" : "ひだりへ") : ""}`
           : "つぎの おしごとを まとう";
-    const key = visible ? s.courseId : "";
+    const key = visible ? raceRoadGraph(s).key : "";
     if (key !== mapKey) {
       mapKey = key;
-      map = visible ? graphMap(roadGraph(s.courseId)) : null;
+      map = visible ? graphMap(raceRoadGraph(s)) : null;
     }
     $("mini-map-branches").setAttribute("d", map?.branches || "");
     $("mini-map-heading").style.display = map ? "" : "none";
@@ -149,7 +159,7 @@ export function createMissionUI(s, { clearControls, muted, beep, event }) {
     $("mini-map-hospitals").innerHTML = "";
     $("mini-map-route").setAttribute("d", "");
     if (map) {
-      const g = roadGraph(s.courseId);
+      const g = raceRoadGraph(s);
       $("mini-map-path").setAttribute("d", map.main);
       const p = playerPose(s),
         v = map.project(p);
@@ -183,36 +193,9 @@ export function createMissionUI(s, { clearControls, muted, beep, event }) {
         $("mini-map-target").setAttribute("cx", v.x);
         $("mini-map-target").setAttribute("cy", v.y);
         if (nav) {
-          const road = s.road,
-            e = g.edges[road.edge],
-            direction =
-              nav.direction || (nav.uTurn ? -road.direction : road.direction),
-            segments = [];
-          if (!nav.path.length) {
-            const length =
-              Number.isFinite(nav.cost) && nav.cost > 0
-                ? nav.cost
-                : e.closed
-                  ? e.length
-                  : 12;
-            segments.push(map.segment(e, road.d, road.d + length * direction));
-          } else {
-            segments.push(map.segment(e, road.d, direction > 0 ? e.length : 0));
-            nav.path.forEach((port, i) => {
-              const edge = g.edges[port.edge];
-              segments.push(
-                map.segment(
-                  edge,
-                  port.direction > 0 ? 0 : edge.length,
-                  i === nav.path.length - 1
-                    ? t.d
-                    : port.direction > 0
-                      ? edge.length
-                      : 0,
-                ),
-              );
-            });
-          }
+          const segments = navigationSegments(s, nav, t).map((seg) =>
+            map.segment(seg.edge, seg.start, seg.end),
+          );
           $("mini-map-route").setAttribute("d", segments.join(" "));
         }
       }
