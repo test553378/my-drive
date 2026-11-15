@@ -606,6 +606,7 @@ export class GameRenderer {
       modelCacheSize: this.factory.templates.size,
       bufferSize: [this.canvas.width, this.canvas.height],
       sceneCourse: this.course?.track.id,
+      cameraFov: this.camera.fov,
       activeRoads: this.course
         ? {
             key: this.course.graph.key,

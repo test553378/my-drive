@@ -22,111 +22,121 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body class="in-garage">
-    <canvas id="world" aria-label="3Dスーパーカーレース"></canvas>
+    <div id="play-surface" data-game-surface>
+      <canvas id="world" aria-label="3Dスーパーカーレース"></canvas>
+      <div class="ui">
+        <div class="top">
+          <div class="hud-group">
+            <div class="hud">
+              <small>🏁 LAP</small><strong id="lap">1 / 2</strong>
+            </div>
+            <div class="hud">
+              <small>🏆 POSITION</small><strong id="rank">5 / 5</strong>
+            </div>
+            <div class="hud">
+              <small>⏱ TIME</small><strong id="time">0.0s</strong>
+            </div>
+          </div>
+          <div class="brand">
+            GRAND <b>RACE</b><span>3D GT EXPERIENCE</span>
+          </div>
+          <div class="hud-group">
+            <button
+              class="pause"
+              id="help"
+              aria-label="おとなのかたへ：動作診断"
+            >
+              ？
+            </button>
+            <button class="pause" id="sound" aria-label="サウンドの切り替え">
+              🔇
+            </button>
+            <button class="pause" id="pause" aria-label="いちじていし">
+              Ⅱ
+            </button>
+          </div>
+        </div>
+        <div class="progress"><div id="progressbar"></div></div>
+        <div class="speed-panel">
+          <span class="speed-label">SPEED</span>
+          <div><strong id="speed">000</strong><span>km/h</span></div>
+          <div class="speed-hint">AUTO ACCELERATION</div>
+        </div>
+        <div class="mini-map">
+          <svg viewBox="0 0 100 100" aria-label="コース全体図と自車位置">
+            <path id="mini-map-path" />
+            <path id="mini-map-branches" />
+            <path id="mini-map-route" />
+            <g id="mini-map-pits"></g>
+            <g id="mini-map-hospitals"></g>
+            <circle id="mini-map-target" r="3" />
+            <path id="mini-map-heading" d="M0,-6 L3,2 L0,0 L-3,2Z" />
+            <circle id="mini-map-car" r="4" /></svg
+          ><span id="race-course"></span>
+        </div>
+        <div id="mission-hud" class="mission-hud" hidden>
+          <strong id="mission-count">🌟 おしごと 0 / 2</strong>
+          <div id="radio-message" aria-live="polite"></div>
+          <div class="mission-guidance">
+            <b id="mission-arrow">⬆</b><span id="mission-instruction"></span>
+          </div>
+        </div>
+        <div id="mission-targets" class="mission-targets"></div>
+        <div class="event-hud">
+          <div class="penalty-badge">
+            ⏱ <span id="penalty-time">+0びょう</span>
+          </div>
+          <div class="condition-badge" id="condition" hidden>
+            <strong id="condition-text"></strong
+            ><button id="pit-guide">🔧 しゅうりへ</button>
+            <div class="repair-meter"><div id="repair-progress"></div></div>
+          </div>
+        </div>
+        <div id="pedestrian-warning" class="pedestrian-warning" hidden>
+          <b>🚶 ✋</b><span>ひとが わたるよ<br />ブレーキで とまろう</span>
+        </div>
+        <div id="forced-stop" class="forced-stop" hidden></div>
+        <div class="countdown" id="countdown">3</div>
+        <div id="toast" class="toast" aria-live="polite"></div>
+        <div class="controls">
+          <button class="steer left" id="left" aria-label="ひだり">
+            ◀<span>ひだり</span>
+          </button>
+          <div class="driving-actions">
+            <button class="brake" id="brake" aria-label="ブレーキ">
+              ✋<span>ブレーキ</span>
+            </button>
+            <div class="boost-zone">
+              <button class="boost" id="boost" aria-label="ブースト">
+                ⚡<br />ターボ
+                <div class="meter" id="boostmeter"></div></button
+              ><span class="boost-txt">はやく はしる</span>
+            </div>
+            <button class="uturn" id="uturn" aria-label="ユーターン" hidden>
+              ↶<span>ユーターン</span>
+            </button>
+            <button
+              class="siren"
+              id="siren"
+              aria-label="サイレンの切り替え"
+              aria-pressed="false"
+              hidden
+            >
+              🚨<span>サイレン</span>
+            </button>
+          </div>
+          <button class="steer right" id="right" aria-label="みぎ">
+            ▶<span>みぎ</span>
+          </button>
+        </div>
+      </div>
+    </div>
     <div id="asset-loading" class="asset-loading" role="status">
       <div class="panel">
         <h2>3Dの じゅんびを しているよ</h2>
         <p id="asset-loading-text">くるまと コースを じゅんびしています…</p>
         <button class="secondary" id="loading-help">
           おとなのかたへ：動作診断
-        </button>
-      </div>
-    </div>
-    <div class="ui">
-      <div class="top">
-        <div class="hud-group">
-          <div class="hud">
-            <small>🏁 LAP</small><strong id="lap">1 / 2</strong>
-          </div>
-          <div class="hud">
-            <small>🏆 POSITION</small><strong id="rank">5 / 5</strong>
-          </div>
-          <div class="hud">
-            <small>⏱ TIME</small><strong id="time">0.0s</strong>
-          </div>
-        </div>
-        <div class="brand">GRAND <b>RACE</b><span>3D GT EXPERIENCE</span></div>
-        <div class="hud-group">
-          <button class="pause" id="help" aria-label="おとなのかたへ：動作診断">
-            ？
-          </button>
-          <button class="pause" id="sound" aria-label="サウンドの切り替え">
-            🔇
-          </button>
-          <button class="pause" id="pause" aria-label="いちじていし">Ⅱ</button>
-        </div>
-      </div>
-      <div class="progress"><div id="progressbar"></div></div>
-      <div class="speed-panel">
-        <span class="speed-label">SPEED</span>
-        <div><strong id="speed">000</strong><span>km/h</span></div>
-        <div class="speed-hint">AUTO ACCELERATION</div>
-      </div>
-      <div class="mini-map">
-        <svg viewBox="0 0 100 100" aria-label="コース全体図と自車位置">
-          <path id="mini-map-path" />
-          <path id="mini-map-branches" />
-          <path id="mini-map-route" />
-          <g id="mini-map-pits"></g>
-          <g id="mini-map-hospitals"></g>
-          <circle id="mini-map-target" r="3" />
-          <path id="mini-map-heading" d="M0,-6 L3,2 L0,0 L-3,2Z" />
-          <circle id="mini-map-car" r="4" /></svg
-        ><span id="race-course"></span>
-      </div>
-      <div id="mission-hud" class="mission-hud" hidden>
-        <strong id="mission-count">🌟 おしごと 0 / 2</strong>
-        <div id="radio-message" aria-live="polite"></div>
-        <div class="mission-guidance">
-          <b id="mission-arrow">⬆</b><span id="mission-instruction"></span>
-        </div>
-      </div>
-      <div id="mission-targets" class="mission-targets"></div>
-      <div class="event-hud">
-        <div class="penalty-badge">
-          ⏱ <span id="penalty-time">+0びょう</span>
-        </div>
-        <div class="condition-badge" id="condition" hidden>
-          <strong id="condition-text"></strong
-          ><button id="pit-guide">🔧 しゅうりへ</button>
-          <div class="repair-meter"><div id="repair-progress"></div></div>
-        </div>
-      </div>
-      <div id="pedestrian-warning" class="pedestrian-warning" hidden>
-        <b>🚶 ✋</b><span>ひとが わたるよ<br />ブレーキで とまろう</span>
-      </div>
-      <div id="forced-stop" class="forced-stop" hidden></div>
-      <div class="countdown" id="countdown">3</div>
-      <div id="toast" class="toast" aria-live="polite"></div>
-      <div class="controls">
-        <button class="steer left" id="left" aria-label="ひだり">
-          ◀<span>ひだり</span>
-        </button>
-        <div class="driving-actions">
-          <button class="brake" id="brake" aria-label="ブレーキ">
-            ✋<span>ブレーキ</span>
-          </button>
-          <div class="boost-zone">
-            <button class="boost" id="boost" aria-label="ブースト">
-              ⚡<br />ターボ
-              <div class="meter" id="boostmeter"></div></button
-            ><span class="boost-txt">はやく はしる</span>
-          </div>
-          <button class="uturn" id="uturn" aria-label="ユーターン" hidden>
-            ↶<span>ユーターン</span>
-          </button>
-          <button
-            class="siren"
-            id="siren"
-            aria-label="サイレンの切り替え"
-            aria-pressed="false"
-            hidden
-          >
-            🚨<span>サイレン</span>
-          </button>
-        </div>
-        <button class="steer right" id="right" aria-label="みぎ">
-          ▶<span>みぎ</span>
         </button>
       </div>
     </div>
@@ -468,7 +478,7 @@
         このゲームにはJavaScriptが必要です。Safariの設定を確認してください。
       </div></noscript
     >
-    <script src="./diagnostics.js?v=8.0.1"></script>
-    <script type="module" src="./game.bundle.js?v=8.0.1"></script>
+    <script src="./diagnostics.js?v=8.0.2"></script>
+    <script type="module" src="./game.bundle.js?v=8.0.2"></script>
   </body>
 </html>

@@ -23,8 +23,6 @@ body {
     sans-serif;
   touch-action: manipulation;
   overscroll-behavior: none;
-  -webkit-user-select: none;
-  user-select: none;
 }
 canvas {
   position: fixed;
@@ -1920,4 +1918,18 @@ button,
   stroke: #ffe180;
   stroke-width: 2.4;
   stroke-linecap: round;
+}
+
+/* Only the active play surface owns browser gestures. Dialogs are siblings,
+   so their pan/pinch/selection cannot inherit this lock. */
+#play-surface {
+  position: fixed;
+  inset: 0;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#play-surface.game-gestures-active,
+#play-surface.game-gestures-active * {
+  touch-action: none;
 }
