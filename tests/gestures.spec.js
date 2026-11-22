@@ -90,9 +90,9 @@ test("gesture harness: canvas, HUD, gaps and work targets share a scoped lock in
       );
     });
     expect(points.every(Boolean)).toBe(true);
-    expect(await shortTap(page, "#world", 100)).toBe(false);
     expect(await shortTap(page, "#world", 100)).toBe(true);
-    expect(await shortTap(page, ".hud", 200)).toBe(false);
+    expect(await shortTap(page, "#world", 100)).toBe(true);
+    expect(await shortTap(page, ".hud", 200)).toBe(true);
     expect(await shortTap(page, ".hud", 200)).toBe(true);
     // Real button taps must each produce one click; no synthesized replacements.
     await page.locator("#sound").tap();
@@ -103,8 +103,8 @@ test("gesture harness: canvas, HUD, gaps and work targets share a scoped lock in
     await expect(page.locator("#play-surface")).not.toHaveClass(
       /game-gestures-active/,
     );
-    expect(await shortTap(page, "#modal .subtitle", 100)).toBe(false);
-    expect(await shortTap(page, "#modal .subtitle", 100)).toBe(false);
+    expect(await shortTap(page, "#modal .subtitle", 100)).toBe(true);
+    expect(await shortTap(page, "#modal .subtitle", 100)).toBe(true);
   }
 });
 test("gesture harness: Safari fallback cancellation stays inside play; dialogs keep pan, pinch and selection", async ({
@@ -211,6 +211,25 @@ test("gesture harness: multi-finger input, mission holds and interruption preser
   await expect(target).toBeVisible();
   await expect(target).toHaveCSS("touch-action", "none");
   const box = await target.boundingBox();
+  if (browserName === "chromium") {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [
+        { id: 1, x: box.x + box.width / 2, y: box.y + box.height / 2 },
+      ],
+    });
+    await expect.poll(async () => (await read(page)).fire).toBeLessThan(2.4);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    const stopped = (await read(page)).fire;
+    await page.waitForTimeout(180);
+    expect((await read(page)).fire).toBe(stopped);
+    expect((await read(page)).pointer).toBeNull();
+    await cdp.detach();
+  }
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await expect.poll(async () => (await read(page)).fire).toBeLessThan(2.4);
@@ -235,4 +254,241 @@ test("gesture harness: multi-finger input, mission holds and interruption preser
     pointerType: "touch",
   });
   expect((await read(page)).fire).toBe(after);
+});
+
+test.describe("home menu touch policy", () => {
+  test.use({ isMobile: true });
+  test("real taps on home blank areas are guarded in both orientations and menu selections activate once", async ({
+    page,
+  }) => {
+    await ready(page);
+    for (const size of [
+      { width: 1080, height: 810 },
+      { width: 810, height: 1080 },
+    ]) {
+      await page.setViewportSize(size);
+      await page.evaluate(() => window.raceGestureHarness.mode("menu"));
+      expect((await read(page)).menuGestures.active).toBe(true);
+      expect((await read(page)).gestures.active).toBe(false);
+      for (const sel of ["#modal", ".garage-panel", ".garage-options"])
+        await expect(page.locator(sel)).toHaveCSS("touch-action", "pan-y");
+      // Hit-test real blank padding, including the transparent 3D preview.
+      for (const sel of [
+        "#garage-preview",
+        ".garage-options",
+        ".garage-header",
+      ]) {
+        const point = await page.locator(sel).evaluate((el) => {
+          const r = el.getBoundingClientRect(),
+            x = r.x + 4,
+            y = r.y + 4;
+          const hit = document.elementFromPoint(x, y);
+          return {
+            x,
+            y,
+            blank:
+              !!hit?.closest("#play-surface,#modal") &&
+              !hit.closest("button,p,h1,h2,h3,label,legend,span,small,strong"),
+          };
+        });
+        expect(point.blank).toBe(true);
+        await page.touchscreen.tap(point.x, point.y);
+        await page.touchscreen.tap(point.x, point.y);
+        expect(
+          (await read(page)).menuGestures.recent.some(
+            (e) => e.type === "blank-double-tap" && e.prevented,
+          ),
+        ).toBe(true);
+      }
+      await page.locator('[data-model="1"]').evaluate((el) => {
+        el.dataset.clicks = "0";
+        if (!el.dataset.counting) {
+          el.dataset.counting = "true";
+          el.addEventListener("click", () => {
+            el.dataset.clicks = String(Number(el.dataset.clicks) + 1);
+          });
+        }
+      });
+      await page.locator('[data-model="1"]').tap();
+      await page.locator('[data-model="1"]').tap();
+      await expect(page.locator('[data-model="1"]')).toHaveAttribute(
+        "data-clicks",
+        "2",
+      );
+      expect(await shortTap(page, "#subtitle", 300)).toBe(true);
+      expect(await shortTap(page, "#subtitle", 300)).toBe(true);
+      await page.locator("#start").tap();
+      expect((await read(page)).menuGestures.active).toBe(false);
+      expect((await read(page)).gestures.active).toBe(true);
+      await page.locator("#pause").tap();
+      expect((await read(page)).menuGestures.active).toBe(true);
+      expect(await shortTap(page, "#world", 400)).toBe(true);
+      expect(await shortTap(page, "#world", 400)).toBe(true);
+      await page.evaluate(() => window.raceGestureHarness.mode("finish"));
+      expect((await read(page)).menuGestures.active).toBe(true);
+      expect(await shortTap(page, "#world", 500)).toBe(true);
+      expect(await shortTap(page, "#world", 500)).toBe(true);
+    }
+  });
+  test("home keeps vertical pan and selection, blocks pinch, and restores its guard after diagnostics", async ({
+    page,
+    browserName,
+  }) => {
+    await ready(page);
+    await page.setViewportSize({ width: 810, height: 1080 });
+    const gesture = (sel) =>
+      page.locator(sel).evaluate((el) => {
+        const e = new Event("gesturestart", {
+          bubbles: true,
+          cancelable: true,
+        });
+        el.dispatchEvent(e);
+        return e.defaultPrevented;
+      });
+    expect(await gesture(".garage-options")).toBe(true);
+    await expect(page.locator("#garage-preview")).toHaveCSS(
+      "touch-action",
+      "none",
+    );
+    const pane = page.locator(".garage-options");
+    // Force overflow in the lightweight HTML fixture (the product dynamically
+    // adds more vehicles), so both engines actually exercise a scroll container.
+    await pane.evaluate((el) => {
+      el.style.maxHeight = "240px";
+    });
+    if (browserName === "chromium") {
+      const cdp = await page.context().newCDPSession(page),
+        r = await pane.boundingBox();
+      const start = {
+        id: 1,
+        x: r.x + r.width / 2,
+        y: r.y + Math.min(r.height - 30, 250),
+      };
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [start],
+      });
+      for (const distance of [40, 80, 120, 160]) {
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [{ ...start, y: start.y - distance }],
+        });
+        await page.waitForTimeout(30);
+      }
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+      await cdp.detach();
+    } else {
+      // Playwright mobile WebKit exposes tap, not touch-drag or mouse wheel.
+      // Verify its scroll container plus uncancelled single-finger DOM events;
+      // Chromium above exercises a real browser-generated touch swipe.
+      expect(
+        await tapEvent(page, ".garage-options", "touchstart", [p()], []),
+      ).toBe(false);
+      expect(
+        await tapEvent(page, ".garage-options", "touchmove", [p(20, 140)], []),
+      ).toBe(false);
+      expect(
+        await tapEvent(page, ".garage-options", "touchend", [], [p(20, 140)]),
+      ).toBe(false);
+      await pane.evaluate((el) => {
+        el.scrollTop = 300;
+      });
+    }
+    await expect
+      .poll(() => pane.evaluate((el) => el.scrollTop))
+      .toBeGreaterThan(0);
+    await pane.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    const selected = await page.locator("#instructions").evaluate((el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const s = getSelection();
+      s.removeAllRanges();
+      s.addRange(range);
+      return s.toString();
+    });
+    expect(selected.trim().length).toBeGreaterThan(0);
+    await page.locator("#garage-help").tap();
+    await expect(page.locator("#diagnostics")).toBeVisible();
+    expect((await read(page)).menuGestures.active).toBe(false);
+    const saved = await page.evaluate(() =>
+      JSON.parse(document.querySelector("#diagnostic-report").value),
+    );
+    expect(saved.runtime.menuGestures.active).toBe(false);
+    expect(await gesture("#diagnostics .panel")).toBe(false);
+    expect(await shortTap(page, "#diagnostics .panel", 200)).toBe(false);
+    expect(await shortTap(page, "#diagnostics .panel", 200)).toBe(false);
+    await page.locator("#close-diagnostics").tap();
+    // No animation-frame delay may leave the first home double-tap unguarded.
+    expect((await read(page)).menuGestures.active).toBe(true);
+    expect(await shortTap(page, "#world", 200)).toBe(true);
+    expect(await shortTap(page, "#world", 200)).toBe(true);
+    if (browserName === "chromium") {
+      const cdp = await page.context().newCDPSession(page),
+        r = await pane.boundingBox();
+      const center = {
+        x: r.x + r.width / 2,
+        y: r.y + Math.min(r.height / 2, 150),
+      };
+      const points = (distance) => [
+        { id: 1, x: center.x - distance, y: center.y },
+        { id: 2, x: center.x + distance, y: center.y },
+      ];
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: points(35),
+      });
+      for (const distance of [45, 65, 90, 120])
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: points(distance),
+        });
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+      await expect
+        .poll(() => page.evaluate(() => visualViewport.scale))
+        .toBeLessThanOrEqual(1.01);
+      expect((await read(page)).menuGestures.zoomObservedDuringPlay).toBe(
+        false,
+      );
+      await cdp.detach();
+    }
+  });
+});
+
+test("rapid race taps activate turbo on pointerdown and click controls once per release", async ({
+  page,
+}) => {
+  await ready(page);
+  await page.locator("#start").tap();
+  for (let i = 0; i < 3; i++) await page.locator("#boost").tap();
+  let r = await read(page);
+  expect(r.counts.boost).toBe(3);
+  expect(r.counts.boostClick || 0).toBe(0);
+  expect(
+    r.gestures.recent
+      .filter((e) => e.type === "touchstart")
+      .every((e) => e.prevented),
+  ).toBe(true);
+  for (const id of ["sound", "siren"]) {
+    await page.locator("#" + id).tap();
+    expect((await read(page)).counts[id]).toBe(1);
+    await page.locator("#" + id).tap();
+    expect((await read(page)).counts[id]).toBe(2);
+  }
+  await page.locator("#pause").tap();
+  expect((await read(page)).phase).toBe("pause");
+  await page.locator("#start").tap();
+  expect((await read(page)).phase).toBe("race");
+  await page.locator("#sound").click();
+  expect((await read(page)).counts.sound).toBe(3);
+  await page.locator("#sound").focus();
+  await page.keyboard.press("Enter");
+  expect((await read(page)).counts.sound).toBe(4);
 });

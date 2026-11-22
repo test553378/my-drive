@@ -84,15 +84,28 @@ async function boot() {
   const gestures = installGameGestures($("play-surface"), {
     onInterrupt: () => clearControls(),
   });
+  // The transparent garage lets some blank-space touches reach the canvas.
+  // Observe both menu and canvas at their common ancestor, excluding dialogs.
+  const menuGestures = installGameGestures(document.body, {
+    mode: "menu",
+    isSurface: (target) =>
+      !!target.closest?.("#play-surface,#modal,#asset-loading"),
+    onInterrupt: () => clearControls(),
+  });
   function syncGameGestures() {
+    const visible =
+      !document.hidden &&
+      $("diagnostics").classList.contains("hidden") &&
+      !$("unsupported").classList.contains("visible");
+    const available = visible && graphicsReady && $("asset-loading").hidden;
+    const menuVisible = !$("modal").classList.contains("hidden");
     gestures.setActive(
-      graphicsReady &&
-        !document.hidden &&
-        (S.phase === "race" || S.phase === "countdown") &&
-        $("modal").classList.contains("hidden") &&
-        $("diagnostics").classList.contains("hidden") &&
-        !$("unsupported").classList.contains("visible") &&
-        $("asset-loading").hidden,
+      available &&
+        !menuVisible &&
+        (S.phase === "race" || S.phase === "countdown"),
+    );
+    menuGestures.setActive(
+      visible && menuVisible && ["menu", "pause", "finish"].includes(S.phase),
     );
   }
   let garageYaw = -0.24,
@@ -161,6 +174,7 @@ async function boot() {
   D.observe(() => ({
     phase: S.phase,
     inputGestures: gestures.snapshot(),
+    menuGestures: menuGestures.snapshot(),
     elapsed: S.time,
     seed: S.seed,
     ...missionSnapshot(S),
@@ -441,6 +455,7 @@ async function boot() {
         ? "つぎは ひとに みちを ゆずろう！"
         : "さいごまで はしれたね！";
     beep(770);
+    syncGameGestures();
   }
   let pausedPhase = "race";
   function pause() {
@@ -462,6 +477,7 @@ async function boot() {
       $("instructions").textContent =
         "◀ ▶ で まがる ／ はなすと そのばを キープ";
     } else if (S.phase === "pause") resume();
+    syncGameGestures();
     applyAudio();
   }
   function resume() {
@@ -594,6 +610,7 @@ async function boot() {
     )
       return;
     gestures.setActive(false);
+    menuGestures.setActive(false);
     changing = true;
     graphicsReady = false;
     clearControls();
@@ -799,10 +816,13 @@ async function boot() {
   addEventListener("race-support-open", () => {
     clearControls();
     if (S.phase === "race" || S.phase === "countdown") pause();
+    syncGameGestures();
   });
+  addEventListener("race-support-close", syncGameGestures);
   addEventListener("race-fatal", () => {
     clearControls();
     if (S.phase === "race" || S.phase === "countdown") pause();
+    menuGestures.setActive(false);
     stop();
   });
 
@@ -853,12 +873,14 @@ async function boot() {
     }
   });
   loading(true);
+  syncGameGestures();
   try {
     await graphics.init(S);
     graphicsReady = true;
     metric();
     refreshGarage();
     loading(false);
+    syncGameGestures();
     schedule();
   } catch (e) {
     loading(false);

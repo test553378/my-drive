@@ -8,6 +8,7 @@ export function createInput(state, allowed = () => state.phase === "race") {
     elements.get(field)?.classList.toggle("is-down", state[field]);
   }
   function bind(element, field) {
+    element.setAttribute?.("data-pointer-control", "");
     elements.set(field, element);
     element.addEventListener("pointerdown", (e) => {
       e.preventDefault();
@@ -40,12 +41,20 @@ export function createInput(state, allowed = () => state.phase === "race") {
   return { bind, key, clear };
 }
 // Safari decides native gestures from touch-action at contact start. The
-// touchend fallback only cancels a second short tap on a non-interactive area;
-// buttons retain native click activation and Pointer Events retain ownership.
-export function installGameGestures(root, { onInterrupt = () => {} } = {}) {
+// game touch defaults are cancelled before Safari can zoom. Pointer Events
+// retain held-input ownership and activate click-based controls exactly once.
+export function installGameGestures(
+  root,
+  { onInterrupt = () => {}, mode = "play", isSurface = () => true } = {},
+) {
   const view = root.ownerDocument.defaultView;
+  const menu = mode === "menu",
+    activeClass = menu ? "menu-gestures-active" : "game-gestures-active";
   const listeners = [],
-    recent = [];
+    recent = [],
+    pointerTaps = new Map(),
+    completedTaps = new Map();
+  let forwardingClick = false;
   const interactive =
     "button,a,input,textarea,select,summary,[role=button],[contenteditable]";
   let active = false,
@@ -60,11 +69,21 @@ export function installGameGestures(root, { onInterrupt = () => {} } = {}) {
   });
   let previousViewport = readViewport();
   const now = () => view.performance.now();
-  const inside = (e) => root.contains(e.target);
+  const inside = (e) => root.contains(e.target) && isSurface(e.target);
   const button = (e) => !!e.target.closest?.(interactive);
+  const tapButton = (e) => {
+    const element = e.target.closest?.("button");
+    return element &&
+      !element.disabled &&
+      !element.hasAttribute?.("data-pointer-control") &&
+      typeof element.click === "function"
+      ? element
+      : null;
+  };
   const reset = () => {
     tap = lastTap = null;
     lastTouch = -Infinity;
+    pointerTaps.clear();
   };
   function record(type, e, detail = {}) {
     recent.push({
@@ -95,14 +114,107 @@ export function installGameGestures(root, { onInterrupt = () => {} } = {}) {
     root,
     "pointerdown",
     (e) => {
-      if (active && inside(e) && e.pointerType === "touch") lastTouch = now();
+      if (!active || !inside(e)) return;
+      if (e.pointerType !== "touch") {
+        if (e.pointerType === "mouse") {
+          lastTouch = -Infinity;
+          completedTaps.delete(e.target.closest?.("button"));
+        }
+        return;
+      }
+      lastTouch = now();
+      const element = tapButton(e);
+      if (element)
+        pointerTaps.set(e.pointerId, {
+          element,
+          x: e.clientX,
+          y: e.clientY,
+          moved: false,
+        });
+      for (const [element, at] of completedTaps)
+        if (now() - at > 1000) completedTaps.delete(element);
+    },
+    { passive: true, capture: true },
+  );
+  listen(
+    root,
+    "pointermove",
+    (e) => {
+      const owned = pointerTaps.get(e.pointerId);
+      if (owned && Math.hypot(e.clientX - owned.x, e.clientY - owned.y) > 24)
+        owned.moved = true;
     },
     { passive: true },
   );
   listen(
     root,
+    "pointerup",
+    (e) => {
+      const owned = pointerTaps.get(e.pointerId);
+      pointerTaps.delete(e.pointerId);
+      if (
+        !active ||
+        !inside(e) ||
+        !owned ||
+        owned.moved ||
+        owned.element.disabled
+      )
+        return;
+      const rect = owned.element.getBoundingClientRect();
+      if (
+        e.clientX < rect.left ||
+        e.clientX > rect.right ||
+        e.clientY < rect.top ||
+        e.clientY > rect.bottom
+      )
+        return;
+      // Cancelling Touch Events can remove Safari's compatibility click. Invoke
+      // the existing handler from trusted pointerup; block any later ghost click.
+      completedTaps.set(owned.element, now());
+      if (completedTaps.size > 16)
+        completedTaps.delete(completedTaps.keys().next().value);
+      record("pointer-tap", e);
+      forwardingClick = true;
+      try {
+        owned.element.click();
+      } finally {
+        forwardingClick = false;
+      }
+    },
+    { passive: true },
+  );
+  listen(view, "pointerup", (e) => pointerTaps.delete(e.pointerId), {
+    passive: true,
+  });
+  listen(root, "lostpointercapture", (e) => pointerTaps.delete(e.pointerId), {
+    passive: true,
+  });
+  listen(
+    root,
+    "click",
+    (e) => {
+      if (forwardingClick || !inside(e)) return;
+      const element = e.target.closest?.("button"),
+        at = completedTaps.get(element);
+      const fromTouch =
+        e.pointerType === "touch" || (!e.pointerType && e.detail > 0);
+      if (
+        fromTouch &&
+        ((active && now() - lastTouch < 1000) ||
+          (at !== undefined && now() - at < 1000))
+      ) {
+        if (e.cancelable) e.preventDefault();
+        e.stopImmediatePropagation();
+        record("compatibility-click-blocked", e);
+      }
+    },
+    { capture: true, passive: false },
+  );
+  listen(
+    root,
     "pointercancel",
     (e) => {
+      pointerTaps.delete(e.pointerId);
       tap = lastTap = null;
       if (active) record("pointercancel", e);
     },
@@ -113,6 +225,9 @@ export function installGameGestures(root, { onInterrupt = () => {} } = {}) {
     "touchstart",
     (e) => {
       if (!active || !inside(e)) return;
+      // Racing has no native pan/zoom. Menus retain single-finger vertical
+      // scrolling, but a second contact cannot start browser pinch zoom.
+      if (e.cancelable && (!menu || e.touches.length > 1)) e.preventDefault();
       lastTouch = now();
       tap =
         e.touches.length === 1
@@ -128,12 +243,19 @@ export function installGameGestures(root, { onInterrupt = () => {} } = {}) {
       if (e.touches.length !== 1) lastTap = null;
       record("touchstart", e);
     },
-    { passive: true },
+    { passive: false, capture: true },
   );
   listen(
     root,
     "touchmove",
     (e) => {
+      if (
+        active &&
+        inside(e) &&
+        e.cancelable &&
+        (!menu || e.touches.length > 1)
+      )
+        e.preventDefault();
       if (!tap) return;
       const point = Array.from(e.touches).find((p) => p.identifier === tap.id);
       if (
@@ -145,7 +267,7 @@ export function installGameGestures(root, { onInterrupt = () => {} } = {}) {
         lastTap = null;
       }
     },
-    { passive: true },
+    { passive: false },
   );
   listen(
     root,
@@ -163,8 +285,6 @@ export function installGameGestures(root, { onInterrupt = () => {} } = {}) {
         !point ||
         e.touches.length ||
         tap.moved ||
-        !tap.blank ||
-        button(e) ||
         now() - tap.at > 350
       ) {
         tap = lastTap = null;
@@ -176,10 +296,18 @@ export function installGameGestures(root, { onInterrupt = () => {} } = {}) {
         lastTap &&
         current.at - lastTap.at <= 350 &&
         Math.hypot(current.x - lastTap.x, current.y - lastTap.y) <= 32;
-      if (double && e.cancelable) e.preventDefault();
+      if (e.cancelable) e.preventDefault();
+      const blank = tap.blank;
       lastTap = current;
       tap = null;
-      record(double ? "blank-double-tap" : "touchend", e);
+      record(
+        double
+          ? blank
+            ? "blank-double-tap"
+            : "control-double-tap"
+          : "touchend",
+        e,
+      );
     },
     { passive: false },
   );
@@ -187,7 +315,10 @@ export function installGameGestures(root, { onInterrupt = () => {} } = {}) {
     root,
     "touchcancel",
     (e) => {
-      reset();
+      tap = lastTap = null;
+      // Pointer cancellation owns one contact. Do not discard another
+      // finger's pending button tap while that finger is still on the screen.
+      if (e.touches.length === 0) pointerTaps.clear();
       if (active) record("touchcancel", e);
       if (active && e.touches.length === 0) onInterrupt("touchcancel");
     },
@@ -220,7 +351,7 @@ export function installGameGestures(root, { onInterrupt = () => {} } = {}) {
     root,
     "contextmenu",
     (e) => {
-      if (active && inside(e) && e.cancelable) e.preventDefault();
+      if (!menu && active && inside(e) && e.cancelable) e.preventDefault();
     },
     false,
   );
@@ -250,12 +381,13 @@ export function installGameGestures(root, { onInterrupt = () => {} } = {}) {
       if (!value) interrupt("play-ended");
       active = value;
       reset();
-      root.classList.toggle("game-gestures-active", active);
+      root.classList.toggle(activeClass, active);
       record("policy-change");
     },
     snapshot: () => ({
       active,
-      policy: "active-play-surface",
+      policy: menu ? "menu-double-tap" : "active-play-surface",
+      pinchZoomAllowed: false,
       zoomObservedDuringPlay: sawZoom,
       viewport: readViewport(),
       recent: recent.map((e) => ({ ...e })),
@@ -263,7 +395,8 @@ export function installGameGestures(root, { onInterrupt = () => {} } = {}) {
     destroy() {
       interrupt("destroy");
       active = false;
-      root.classList.remove("game-gestures-active");
+      completedTaps.clear();
+      root.classList.remove(activeClass);
       listeners.forEach((remove) => remove());
     },
   };

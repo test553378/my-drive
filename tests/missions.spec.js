@@ -184,7 +184,7 @@ for (const [model, kind, stage] of [
         .locator(
           `[data-target="${kind === "ambulance" ? "patient" : "suspect"}"]`,
         )
-        .click();
+        .tap();
       r = await read(page);
       expect(r.mission.completed).toBe(0);
       expect(["BOARDING", "POLICE_CHECK"]).toContain(r.mission.active.stage);

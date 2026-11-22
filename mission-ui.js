@@ -211,6 +211,8 @@ export function createMissionUI(s, { clearControls, muted, beep, event }) {
         button = document.createElement("button");
         button.className = "mission-target";
         button.dataset.target = t.id;
+        if (t.id.startsWith("fire-"))
+          button.setAttribute("data-pointer-control", "");
         button.setAttribute("aria-label", t.label);
         button.innerHTML = "<span>👆</span>";
         $("mission-targets").append(button);
