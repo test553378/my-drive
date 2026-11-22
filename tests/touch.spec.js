@@ -13,19 +13,45 @@ test("game gestures suppress double-tap without disabling ordinary selection or 
     .getAttribute("content");
   expect(viewport).not.toMatch(/maximum-scale|user-scalable/);
   await expect(page.locator("#right")).toHaveCSS("touch-action", "none");
-  for (const selector of ["html", "body", ".modal", ".garage-options"]) {
+  for (const selector of ["html", "body"]) {
     const action = await page
       .locator(selector)
       .first()
       .evaluate((el) => getComputedStyle(el).touchAction);
     expect(action).toMatch(/manipulation|pinch-zoom/);
   }
+  for (const selector of [".modal", ".garage-options"])
+    await expect(page.locator(selector).first()).toHaveCSS(
+      "touch-action",
+      "pan-y",
+    );
+  expect(
+    await page.evaluate(
+      () => window.raceDiagnostics.read().runtime.menuGestures.active,
+    ),
+  ).toBe(true);
+  const preview = await page.locator("#garage-preview").boundingBox();
+  for (let i = 0; i < 2; i++)
+    await page.touchscreen.tap(preview.x + 4, preview.y + 4);
+  const menuEnds = await page.evaluate(() =>
+    window.raceDiagnostics
+      .read()
+      .runtime.menuGestures.recent.filter((e) =>
+        ["touchend", "blank-double-tap", "control-double-tap"].includes(e.type),
+      ),
+  );
+  expect(menuEnds.length).toBeGreaterThanOrEqual(2);
+  expect(menuEnds.every((e) => e.prevented)).toBe(true);
   for (let i = 0; i < 3; i++) await page.locator('[data-model="1"]').tap();
   await expect(page.locator('[data-model="1"]')).toHaveAttribute(
     "aria-pressed",
     "true",
   );
   expect(await page.evaluate(() => visualViewport.scale)).toBe(1);
+  await page.locator('[data-part="aero"][data-value="2"]').tap();
+  await expect(
+    page.locator('[data-part="aero"][data-value="2"]'),
+  ).toHaveAttribute("aria-pressed", "true");
   await page.locator("#start").tap();
   await expect
     .poll(async () =>
@@ -42,8 +68,30 @@ test("game gestures suppress double-tap without disabling ordinary selection or 
     );
   const report = await page.evaluate(() => window.raceDiagnostics.read());
   expect(report.runtime.inputGestures.active).toBe(true);
+  expect(report.runtime.parts.aero).toBe(2);
   expect(report.viewport.scale).toBe(1);
   expect(report.runtime.cameraFov).toBeGreaterThan(0);
+  // The second physical contact can land on the now-disabled turbo button.
+  // Use coordinates rather than Locator.tap(), which waits for it to re-enable.
+  const turbo = await page.locator("#boost").boundingBox();
+  for (let i = 0; i < 2; i++)
+    await page.touchscreen.tap(
+      turbo.x + turbo.width / 2,
+      turbo.y + turbo.height / 2,
+    );
+  await expect(page.locator("#boost")).toBeDisabled();
+  await expect(page.locator("#toast")).toContainText("ターボ");
+  const starts = await page.evaluate(() =>
+    window.raceDiagnostics
+      .read()
+      .runtime.inputGestures.recent.filter((e) => e.type === "touchstart"),
+  );
+  expect(starts.length).toBeGreaterThanOrEqual(2);
+  expect(starts.every((e) => e.prevented)).toBe(true);
+  await page.locator("#sound").tap();
+  await expect(page.locator("#sound")).toHaveText("🔊");
+  await page.locator("#sound").tap();
+  await expect(page.locator("#sound")).toHaveText("🔇");
   const right = page.locator("#right");
   for (const id of [31, 32])
     await right.dispatchEvent("pointerdown", {

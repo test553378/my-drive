@@ -1933,3 +1933,16 @@ button,
 #play-surface.game-gestures-active * {
   touch-action: none;
 }
+
+/* Menus retain vertical scrolling without native pinch/double-tap zoom.
+   Keep this separate from the stronger race lock and the diagnostic dialog. */
+#modal,
+#modal .garage-panel,
+#modal .garage-options,
+#asset-loading,
+#asset-loading .panel {
+  touch-action: pan-y;
+}
+body.menu-gestures-active #play-surface {
+  touch-action: pan-y;
+}

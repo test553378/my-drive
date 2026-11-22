@@ -27,6 +27,12 @@ function clear() {
     .forEach((b) => b.classList.remove("holding"));
 }
 const gestures = installGameGestures($("play-surface"), { onInterrupt: clear });
+const menuGestures = installGameGestures(document.body, {
+  mode: "menu",
+  isSurface: (target) =>
+    !!target.closest?.("#play-surface,#modal,#asset-loading"),
+  onInterrupt: clear,
+});
 const ui = createMissionUI(s, {
   clearControls: clear,
   muted: () => true,
@@ -34,13 +40,17 @@ const ui = createMissionUI(s, {
   event: () => {},
 });
 function sync() {
-  const menu = s.phase === "menu";
+  const menu = s.phase === "menu" || s.phase === "finish";
   document.body.classList.toggle("in-garage", menu);
   $("asset-loading").hidden = true;
+  $("siren").hidden = s.phase !== "race";
   $("modal").classList.toggle("hidden", s.phase === "race");
   $("modal").classList.toggle("paused", s.phase === "pause");
   gestures.setActive(
     s.phase === "race" && $("diagnostics").classList.contains("hidden"),
+  );
+  menuGestures.setActive(
+    s.phase !== "race" && $("diagnostics").classList.contains("hidden"),
   );
   ui.update();
   ui.draw(
@@ -66,12 +76,23 @@ for (const id of ["sound", "siren"])
   $(id).addEventListener("click", () => {
     counts[id] = (counts[id] || 0) + 1;
   });
+$("boost").addEventListener("pointerdown", () => {
+  counts.boost = (counts.boost || 0) + 1;
+});
+$("boost").addEventListener("click", () => {
+  counts.boostClick = (counts.boostClick || 0) + 1;
+});
 $("start").addEventListener("click", () => mode("race"));
 $("pause").addEventListener("click", () =>
   mode(s.phase === "race" ? "pause" : "race"),
 );
 $("garage-return").addEventListener("click", () => mode("menu"));
-window.addEventListener("race-support-open", () => mode("pause"));
+$("garage-help").addEventListener("click", () => $("help").click());
+window.addEventListener("race-support-open", () => {
+  if (s.phase === "race") mode("pause");
+  else sync();
+});
+window.addEventListener("race-support-close", sync);
 window.addEventListener("blur", () =>
   mode(s.phase === "race" ? "pause" : s.phase),
 );
@@ -84,6 +105,7 @@ window.raceGestureHarness = {
     pointer: s.missions?.active?.pointer,
     counts: { ...counts },
     gestures: gestures.snapshot(),
+    menuGestures: menuGestures.snapshot(),
   }),
   mode,
   work() {

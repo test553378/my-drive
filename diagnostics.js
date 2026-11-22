@@ -3,7 +3,7 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const report = {
-    version: "8.0.2",
+    version: "8.0.3",
     stage: "loading",
     failure: null,
     events: [],
@@ -39,13 +39,14 @@
   }
   function open() {
     opener = document.activeElement;
+    $("diagnostics").classList.remove("hidden");
     window.dispatchEvent(new Event("race-support-open"));
     refresh();
-    $("diagnostics").classList.remove("hidden");
     $("close-diagnostics").focus();
   }
   function close() {
     $("diagnostics").classList.add("hidden");
+    window.dispatchEvent(new Event("race-support-close"));
     opener?.focus();
   }
   function failure(stage, detail) {
