@@ -76,8 +76,9 @@ test("T03/T04/T05: branch endpoints are tangent, wide, coplanar and include a pa
         assert.ok(Math.abs(angleDelta(p.yaw - q.yaw)) < 0.03);
         assert.ok(Math.abs(edgeWidth(edge, d) - t.halfWidth) < 1e-10);
       }
-      assert.ok(a.parallelLength > 65);
-      for (const d of [65, 70, 75]) {
+      assert.ok(a.parallelLength - a.parallelStart > 12);
+      assert.ok(e.taperStart - e.parallelStart > 12);
+      for (const d of [110, 115, 120]) {
         const p = a.table.find((p) => p.mainStation >= site.gate + d),
           q = trackPose(t, p.mainStation, site.side * (t.halfWidth + 4));
         assert.ok(near(p, q) < 0.05);
@@ -230,7 +231,7 @@ test("T03/T12: fixed layouts keep separate service corridors apart and connector
         for (const p of sets[i])
           for (const q of sets[j])
             assert.ok(
-              Math.hypot(p.x - q.x, p.z - q.z) > 12,
+              Math.abs(p.y - q.y) >= 6 || Math.hypot(p.x - q.x, p.z - q.z) > 12,
               t.id + " separated corridors",
             );
     for (const e of Object.values(g.edges).filter((e) => !e.main && !e.closed))
@@ -238,7 +239,9 @@ test("T03/T12: fixed layouts keep separate service corridors apart and connector
         (p, i) => i % 5 === 0 && !Number.isFinite(p.mainStation),
       )) {
         const min = Math.min(
-          ...t.table.map((q) => Math.hypot(p.x - q.x, p.z - q.z)),
+          ...t.table
+            .filter((q) => Math.abs(p.y - q.y) < 6)
+            .map((q) => Math.hypot(p.x - q.x, p.z - q.z)),
         );
         assert.ok(min > t.halfWidth + 1, t.id + "/" + e.id);
       }
@@ -277,7 +280,8 @@ test("T01/T08: the ground U-turn stays above a sloping mountain road rather than
   const s = createRace(0, 7, {}, "C02", 12345);
   s.phase = "race";
   driveUntil(s, [], (s) => !!s.missions.active, { actions: false });
-  onMain(s, 400);
+  const station = roadGraph(s.courseId).sites[s.missions.active.site].gate + 1;
+  onMain(s, station);
   assert.ok(missionNavigation(s).uTurn);
   const guide = buildRoadGuidance();
   guide.update(s);
@@ -294,7 +298,7 @@ test("T01/T08: the ground U-turn stays above a sloping mountain road rather than
         .applyMatrix4(o.matrixWorld);
       let best = Infinity,
         y = 0;
-      for (let d = 398; d < 420; d += 0.15) {
+      for (let d = station - 2; d < station + 20; d += 0.15) {
         const q = trackPose("C02", d),
           dist = Math.hypot(v.x - q.x, v.z - q.z);
         if (dist < best) {

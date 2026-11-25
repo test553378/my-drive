@@ -5,10 +5,60 @@ import { getTrack, trackPose } from "./tracks.js";
 const cache = new Map();
 const TAU = Math.PI * 2;
 const MERGE_BACK = 30;
+// Use 105 station-metres for lateral separation (about 2.3 s at 45 m/s
+// on a straight), then 20 m of parallel travel. Quintic easing has zero
+// first and second lateral derivatives at both ends.
+const SLIP_TRANSITION = 105;
+const SLIP_PARALLEL = 20;
 export const wrap = (x, n) => ((x % n) + n) % n;
 export const angleDelta = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const mix = (a, b, t) => a + (b - a) * t;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+const mainGrid = new WeakMap();
+function closeToMain(track, p, clearance) {
+  if (!mainGrid.has(track)) {
+    const grid = new Map();
+    for (const q of track.table) {
+      const key = `${Math.floor(q.x / 20)}:${Math.floor(q.z / 20)}`;
+      if (!grid.has(key)) grid.set(key, []);
+      grid.get(key).push(q);
+    }
+    mainGrid.set(track, grid);
+  }
+  const grid = mainGrid.get(track),
+    x = Math.floor(p.x / 20),
+    z = Math.floor(p.z / 20);
+  for (let dx = -1; dx <= 1; dx++)
+    for (let dz = -1; dz <= 1; dz++)
+      if (
+        (grid.get(`${x + dx}:${z + dz}`) || []).some(
+          (q) =>
+            Math.abs(p.y - q.y) < 6 &&
+            Math.hypot(p.x - q.x, p.z - q.z) < clearance,
+        )
+      )
+        return true;
+  return false;
+}
+function selfClear(edge) {
+  const grid = new Map();
+  for (const p of edge.table) {
+    const x = Math.floor(p.x / 16),
+      z = Math.floor(p.z / 16);
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dz = -1; dz <= 1; dz++)
+        if (
+          (grid.get(`${x + dx}:${z + dz}`) || []).some(
+            (q) => p.d - q.d > 35 && Math.hypot(p.x - q.x, p.z - q.z) < 16,
+          )
+        )
+          return false;
+    const key = `${x}:${z}`;
+    if (!grid.has(key)) grid.set(key, []);
+    grid.get(key).push(p);
+  }
+  return true;
+}
 function curve(points, closed = false) {
   const table = [];
   let length = 0;
@@ -109,10 +159,10 @@ function quintic(a, b, ta, tb, lead, tail) {
 }
 function joinCurve(a, b, ta, tb, clear = () => true) {
   const choices = [];
-  for (const lead of [15, 30, 50, 80, 120, 180, 260])
-    for (const tail of [15, 30, 50, 80, 120, 180, 260]) {
+  for (const lead of [15, 30, 50, 80, 120, 180, 260, 360, 480])
+    for (const tail of [15, 30, 50, 80, 120, 180, 260, 360, 480]) {
       const c = quintic(a, b, ta, tb, lead, tail);
-      if (bendOf(c) < 1 / 18 && clear(c))
+      if (bendOf(c) < 1 / 18 && selfClear(c) && clear(c))
         choices.push({ ...c, controls: { lead, tail } });
     }
   choices.sort((a, b) => a.length - b.length);
@@ -136,27 +186,29 @@ function serviceCurves(track, site, hub, merge, fixed) {
       ? quintic(a, b, ta, tb, fixed[role].lead, fixed[role].tail)
       : joinCurve(a, b, ta, tb, check);
   const clear = (c) =>
-    c.table
-      .filter((_, i) => i % 5 === 0)
-      .every(
-        (p) =>
-          Math.min(
-            ...track.table
-              .filter((_, i) => i % 6 === 0)
-              .map((q) => Math.hypot(p.x - q.x, p.z - q.z)),
-          ) >
-          track.halfWidth + 2,
-      );
+    c.table.every(
+      (p) =>
+        !closeToMain(track, p, track.halfWidth + 2) &&
+        (Math.hypot(p.x - hub.x, p.z - hub.z) < 50 ||
+          Math.abs(
+            Math.hypot(
+              p.x - hub.x - site.anchor.tx * 48,
+              p.z - hub.z - site.anchor.tz * 48,
+            ) - 48,
+          ) > 16),
+    );
   const offset = site.side * (track.halfWidth + 4),
-    run = 80,
-    returnRun = 60;
+    transition = SLIP_TRANSITION,
+    parallel = SLIP_PARALLEL,
+    run = transition + parallel,
+    returnRun = transition + parallel;
   const slip = tabulate((t) => {
     const station = site.gate + run * t,
-      p = trackPose(track, station, offset * ease((t * run) / 60));
+      p = trackPose(track, station, offset * ease((t * run) / transition));
     return { x: p.x, y: p.y, z: p.z, mainStation: station };
   });
   const q = slip.table.at(-1),
-    qp = trackPose(track, site.gate + run, offset);
+    qp = edgePose(slip, slip.length);
   const access = concatenate(
     slip,
     join(
@@ -170,33 +222,84 @@ function serviceCurves(track, site, hub, merge, fixed) {
   );
   const rejoin = tabulate((t) => {
     const station = merge.station - returnRun + returnRun * t,
-      p = trackPose(track, station, offset * (1 - ease(t)));
+      p = trackPose(
+        track,
+        station,
+        offset * (1 - ease((t * returnRun - parallel) / transition)),
+      );
     return { x: p.x, y: p.y, z: p.z, mainStation: station };
   });
   const start = rejoin.table[0],
-    sp = trackPose(track, merge.station - returnRun, offset);
-  const approach = join(
-    "exit",
-    hub,
-    start,
-    { x: -site.anchor.tx, z: -site.anchor.tz },
-    { x: sp.tx, z: sp.tz, grade: sp.grade },
-    clear,
-  );
+    sp = edgePose(rejoin, 0);
+  // Leave the ring in its forward tangent, bend away from the ring, then
+  // approach the parallel return lane. A single polynomial could only fit
+  // this turn by folding or crossing the incoming road on outward sites.
+  const departureTangent = { x: -site.anchor.tx, z: -site.anchor.tz },
+    departure = quintic(
+      hub,
+      {
+        x: hub.x + site.hubRight.x * 60 - site.anchor.tx * 60,
+        y: hub.y,
+        z: hub.z + site.hubRight.z * 60 - site.anchor.tz * 60,
+      },
+      site.hubRight,
+      departureTangent,
+      20,
+      20,
+    ),
+    approach = concatenate(
+      departure,
+      join(
+        "exit",
+        departure.table.at(-1),
+        start,
+        departureTangent,
+        { x: sp.tx, z: sp.tz, grade: sp.grade },
+        (candidate) =>
+          clear(candidate) &&
+          candidate.table
+            .filter((_, i) => i % 5 === 0)
+            .every(
+              (p) =>
+                Math.hypot(p.x - hub.x, p.z - hub.z) < 20 ||
+                access.table
+                  .filter((_, i) => i % 5 === 0)
+                  .every(
+                    (q) =>
+                      Math.hypot(q.x - hub.x, q.z - hub.z) < 20 ||
+                      Math.hypot(p.x - q.x, p.z - q.z) > 14,
+                  ),
+            ),
+      ),
+    );
+  const accessTaper = slip.table.find(
+      (p) => p.mainStation >= site.gate + transition,
+    ).d,
+    returnParallel = rejoin.table.find(
+      (p) => p.mainStation >= merge.station - transition,
+    ).d;
   return {
     access: {
       ...access,
       mouthWidth: track.halfWidth,
-      taperLength: slip.length,
+      taperLength: accessTaper,
       parallelLength: slip.length,
-      uvStation: site.gate,
+      parallelStart: accessTaper,
+      mainJoinStation: site.gate + run,
+      transitionRun: transition,
+      parallelRun: parallel,
+      uvStation: site.gate + run - slip.length,
     },
     exit: {
       ...concatenate(approach, rejoin),
       endMouthWidth: track.halfWidth,
       parallelStart: approach.length,
-      taperLength: rejoin.length,
-      uvStation: merge.station - approach.length - rejoin.length,
+      taperStart: approach.length + returnParallel,
+      taperLength: rejoin.length - returnParallel,
+      mainJoinStation: merge.station - returnRun,
+      transitionRun: transition,
+      parallelRun: parallel,
+      uvStation: merge.station - returnRun - approach.length,
     },
   };
 }
@@ -207,7 +310,7 @@ export function edgeWidth(edge, d) {
     return mix(
       edge.width,
       edge.endMouthWidth,
-      ease((d - edge.parallelStart) / edge.taperLength),
+      ease((d - edge.taperStart) / edge.taperLength),
     );
   return edge.width;
 }
@@ -285,130 +388,165 @@ export function searchServiceSites(track) {
   // crossings and tunnels. Three separated junctions are fixed per course.
   const options = [];
   for (let i = 24; i < 123; i++)
-    for (const side of [-1, 1]) {
-      const gate = (i / 128) * track.length,
-        p = trackPose(track, gate),
-        r = { x: -p.tz * side, z: p.tx * side };
-      if (
-        track.repairFractions.some(
-          (f) =>
-            Math.abs(f * track.length - gate) < 48 ||
-            Math.abs(f * track.length - (gate - MERGE_BACK)) < 40,
-        )
-      )
-        continue;
-      if (track.crossings.some((f) => Math.abs(f * track.length - gate) < 50))
-        continue;
-      if (
-        track.tunnel &&
-        gate > track.tunnel[0] * track.length - 50 &&
-        gate < track.tunnel[1] * track.length + 50
-      )
-        continue;
-      const anchor = trackPose(track, gate + 80),
-        hubRight = { x: -anchor.tz * side, z: anchor.tx * side },
-        hub = {
-          x: anchor.x + hubRight.x * 280 + anchor.tx * 80,
-          y: p.y,
-          z: anchor.z + hubRight.z * 280 + anchor.tz * 80,
-        };
-      const center = {
-        x: hub.x + anchor.tx * 48,
-        y: p.y,
-        z: hub.z + anchor.tz * 48,
-      };
-      const clearance =
-        Math.min(
-          ...track.table
-            .filter((_, j) => j % 3 === 0)
-            .map((q) => Math.hypot(q.x - center.x, q.z - center.z)),
-        ) - 48;
-      const corridor = Math.min(
-        ...[35, 65, 100].map((o) =>
-          Math.min(
-            ...track.table
-              .filter((q, j) => j % 3 === 0 && Math.abs(q.d - gate) > 70)
-              .map((q) => Math.hypot(q.x - p.x - r.x * o, q.z - p.z - r.z * o)),
-          ),
-        ),
-      );
-      const merge = trackPose(track, gate - MERGE_BACK);
-      if (Math.min(clearance, corridor + 50) < 20) continue;
-      if (
-        [10, 30, 50, 65, 80].some((d) => {
-          const q = trackPose(track, gate + d),
-            off = side * (track.halfWidth + 4) * ease(d / 60);
-          return (
-            1 + q.curvature * off - Math.abs(q.curvature) * track.halfWidth <
-            0.35
-          );
-        })
-      )
-        continue;
-      let paths;
-      try {
-        paths = serviceCurves(
-          track,
-          { gate, side, p, r, anchor, hubRight },
-          hub,
-          { ...merge, station: gate - MERGE_BACK },
-        );
-      } catch {
-        continue;
-      }
-      const roads = [paths.access, paths.exit].map((e) =>
-        e.table.filter((_, i) => i % 5 === 0),
-      );
-      if (
-        roads[0].some(
-          (a) =>
-            !Number.isFinite(a.mainStation) &&
-            Math.hypot(a.x - hub.x, a.z - hub.z) > 20 &&
-            roads[1].some(
-              (b) =>
-                !Number.isFinite(b.mainStation) &&
-                Math.hypot(b.x - hub.x, b.z - hub.z) > 20 &&
-                Math.hypot(a.x - b.x, a.z - b.z) < 14,
+    for (const side of [-1, 1])
+      for (const hubDistance of [140, 200, 280, 440])
+        for (const hubAdvance of [40, 80, 160]) {
+          const gate = (i / 128) * track.length,
+            p = trackPose(track, gate),
+            r = { x: -p.tz * side, z: p.tx * side };
+          if (
+            track.repairFractions.some(
+              (f) =>
+                Math.abs(f * track.length - gate) < 48 ||
+                Math.abs(f * track.length - (gate - MERGE_BACK)) < 40,
+            )
+          )
+            continue;
+          if (
+            track.crossings.some((f) => Math.abs(f * track.length - gate) < 50)
+          )
+            continue;
+          if (
+            track.tunnel &&
+            gate > track.tunnel[0] * track.length - 50 &&
+            gate < track.tunnel[1] * track.length + 50
+          )
+            continue;
+          const anchorRun = SLIP_TRANSITION + SLIP_PARALLEL,
+            anchor = trackPose(track, gate + anchorRun),
+            hubRight = { x: -anchor.tz * side, z: anchor.tx * side },
+            hub = {
+              x: anchor.x + hubRight.x * hubDistance + anchor.tx * hubAdvance,
+              y: p.y,
+              z: anchor.z + hubRight.z * hubDistance + anchor.tz * hubAdvance,
+            };
+          const center = {
+            x: hub.x + anchor.tx * 48,
+            y: p.y,
+            z: hub.z + anchor.tz * 48,
+          };
+          const clearance =
+            Math.min(
+              ...track.table
+                .filter((_, j) => j % 3 === 0)
+                .map((q) => Math.hypot(q.x - center.x, q.z - center.z)),
+            ) - 48;
+          const corridor = Math.min(
+            ...[35, 65, 100].map((o) =>
+              Math.min(
+                ...track.table
+                  .filter((q, j) => j % 3 === 0 && Math.abs(q.d - gate) > 70)
+                  .map((q) =>
+                    Math.hypot(q.x - p.x - r.x * o, q.z - p.z - r.z * o),
+                  ),
+              ),
             ),
-        )
-      )
-        continue;
-      const ring = Array.from({ length: 40 }, (_, j) => {
-        const t = (j / 40) * TAU;
-        return {
-          x:
-            hub.x +
-            hubRight.x * 48 * Math.sin(t) +
-            anchor.tx * (48 - 48 * Math.cos(t)),
-          z:
-            hub.z +
-            hubRight.z * 48 * Math.sin(t) +
-            anchor.tz * (48 - 48 * Math.cos(t)),
-        };
-      });
-      const points = [...roads.flat(), ...ring];
-      options.push({
-        points,
-        paths,
-        anchor,
-        hubRight,
-        hubPose: hub,
-        gate,
-        side,
-        p,
-        r,
-        center,
-        score: Math.min(clearance, corridor + 50),
-      });
-    }
+          );
+          const merge = trackPose(track, gate - MERGE_BACK);
+          if (Math.min(clearance, corridor + 50) < 20) continue;
+          let paths;
+          try {
+            paths = serviceCurves(
+              track,
+              { gate, side, p, r, anchor, hubRight },
+              hub,
+              { ...merge, station: gate - MERGE_BACK },
+            );
+          } catch {
+            continue;
+          }
+          if (!selfClear(paths.access) || !selfClear(paths.exit)) continue;
+          // Reject offset folds and steep relative angles over BOTH complete
+          // profiles, including the return. Search is offline; startup uses the
+          // resulting fixed controls and never performs this candidate search.
+          if (
+            [paths.access, paths.exit].some((edge) =>
+              edge.table.some((point) => {
+                if (!Number.isFinite(point.mainStation)) return false;
+                const q = trackPose(track, point.mainStation),
+                  pose = edgePose(edge, point.d),
+                  off = -(point.x - q.x) * q.tz + (point.z - q.z) * q.tx;
+                return (
+                  Math.abs(angleDelta(pose.yaw - q.yaw)) > Math.PI / 12 ||
+                  1 +
+                    q.curvature * off -
+                    Math.abs(q.curvature) * track.halfWidth <
+                    0.35
+                );
+              }),
+            )
+          )
+            continue;
+          const roads = [paths.access, paths.exit].map((e) =>
+            e.table.filter((_, i) => i % 5 === 0),
+          );
+          if (
+            roads[0].some(
+              (a) =>
+                !Number.isFinite(a.mainStation) &&
+                Math.hypot(a.x - hub.x, a.z - hub.z) > 20 &&
+                roads[1].some(
+                  (b) =>
+                    !Number.isFinite(b.mainStation) &&
+                    Math.hypot(b.x - hub.x, b.z - hub.z) > 20 &&
+                    Math.abs(a.y - b.y) < 6 &&
+                    Math.hypot(a.x - b.x, a.z - b.z) < 14,
+                ),
+            )
+          )
+            continue;
+          const ring = Array.from({ length: 40 }, (_, j) => {
+            const t = (j / 40) * TAU;
+            return {
+              y: hub.y,
+              x:
+                hub.x +
+                hubRight.x * 48 * Math.sin(t) +
+                anchor.tx * (48 - 48 * Math.cos(t)),
+              z:
+                hub.z +
+                hubRight.z * 48 * Math.sin(t) +
+                anchor.tz * (48 - 48 * Math.cos(t)),
+            };
+          });
+          const points = [...roads.flat(), ...ring];
+          options.push({
+            points,
+            paths,
+            anchor,
+            hubRight,
+            hubPose: hub,
+            gate,
+            side,
+            hubDistance,
+            hubAdvance,
+            anchorRun,
+            p,
+            r,
+            center,
+            score: Math.min(clearance, corridor + 50),
+          });
+        }
   const pair = new Map();
   const conflict = (a, b) => {
-    const key = a.gate + ":" + a.side + ":" + b.gate + ":" + b.side;
+    const key = [
+      a.gate,
+      a.side,
+      a.hubDistance,
+      a.hubAdvance,
+      b.gate,
+      b.side,
+      b.hubDistance,
+      b.hubAdvance,
+    ].join(":");
     if (!pair.has(key))
       pair.set(
         key,
         a.points.some((p) =>
-          b.points.some((q) => Math.hypot(p.x - q.x, p.z - q.z) < 18),
+          b.points.some(
+            (q) =>
+              Math.abs(p.y - q.y) < 6 && Math.hypot(p.x - q.x, p.z - q.z) < 18,
+          ),
         ),
       );
     return pair.get(key);
@@ -416,35 +554,30 @@ export function searchServiceSites(track) {
   const pool = options.sort((a, b) => b.score - a.score);
   let chosen = [],
     best = -Infinity;
-  for (let i = 0; i < pool.length; i++)
-    for (let j = i + 1; j < pool.length; j++)
+  const compatible = (a, b) =>
+    Math.min(
+      Math.abs(a.gate - b.gate),
+      track.length - Math.abs(a.gate - b.gate),
+    ) >= 220 &&
+    Math.hypot(a.center.x - b.center.x, a.center.z - b.center.z) >= 180 &&
+    !conflict(a, b);
+  // Scores are descending. Bound the remaining triples before expensive
+  // corridor comparisons; this preserves the exhaustive optimum.
+  for (let i = 0; i < pool.length; i++) {
+    if (6 * pool[i].score <= best) break;
+    for (let j = i + 1; j < pool.length; j++) {
+      if (pool[i].score + 5 * pool[j].score <= best) break;
+      if (!compatible(pool[i], pool[j])) continue;
       for (let k = j + 1; k < pool.length; k++) {
-        const list = [pool[i], pool[j], pool[k]];
-        if (
-          list.some((a, n) =>
-            list
-              .slice(n + 1)
-              .some(
-                (b) =>
-                  Math.min(
-                    Math.abs(a.gate - b.gate),
-                    track.length - Math.abs(a.gate - b.gate),
-                  ) < 220 ||
-                  conflict(a, b) ||
-                  Math.hypot(a.center.x - b.center.x, a.center.z - b.center.z) <
-                    180,
-              ),
-          )
-        )
-          continue;
-        const score =
-          Math.min(...list.map((o) => o.score)) * 3 +
-          list.reduce((n, o) => n + o.score, 0);
-        if (score > best) {
+        const score = pool[i].score + pool[j].score + 4 * pool[k].score;
+        if (score <= best) break;
+        if (compatible(pool[i], pool[k]) && compatible(pool[j], pool[k])) {
           best = score;
-          chosen = list;
+          chosen = [pool[i], pool[j], pool[k]];
         }
       }
+    }
+  }
   if (chosen.length !== 3)
     throw Error(
       "No safe mission road layout " +
@@ -456,15 +589,21 @@ export function searchServiceSites(track) {
   return chosen.sort((a, b) => a.gate - b.gate);
 }
 function layoutSite(track, layout) {
-  const { gate, side } = layout,
+  const {
+      gate,
+      side,
+      hubDistance = 280,
+      hubAdvance = 80,
+      anchorRun = 80,
+    } = layout,
     p = trackPose(track, gate),
-    anchor = trackPose(track, gate + 80),
+    anchor = trackPose(track, gate + anchorRun),
     r = { x: -p.tz * side, z: p.tx * side },
     hubRight = { x: -anchor.tz * side, z: anchor.tx * side };
   const hub = {
-      x: anchor.x + hubRight.x * 280 + anchor.tx * 80,
+      x: anchor.x + hubRight.x * hubDistance + anchor.tx * hubAdvance,
       y: p.y,
-      z: anchor.z + hubRight.z * 280 + anchor.tz * 80,
+      z: anchor.z + hubRight.z * hubDistance + anchor.tz * hubAdvance,
     },
     center = { x: hub.x + anchor.tx * 48, y: p.y, z: hub.z + anchor.tz * 48 };
   const site = { gate, side, p, r, anchor, hubRight, hubPose: hub, center };
@@ -726,9 +865,9 @@ export function mainContact(s) {
   if (!Number.isFinite(station)) {
     const hint =
       e.mouthWidth && s.road.d < e.parallelLength + 35
-        ? e.uvStation + 80
+        ? e.mainJoinStation
         : e.endMouthWidth && s.road.d > e.parallelStart - 35
-          ? e.uvStation + e.length - 60
+          ? e.mainJoinStation
           : null;
     if (hint === null) return null;
     let best = Infinity;
@@ -810,6 +949,13 @@ function defaultExit(g, r) {
     choices.find(
       (p) =>
         incoming.main && g.edges[p.edge].main && p.direction === r.direction,
+    ) ||
+    choices.find(
+      (p) =>
+        ((incoming.id.startsWith("access-") && r.direction === 1) ||
+          (incoming.id.startsWith("exit-") && r.direction === -1)) &&
+        p.edge === "loop-" + incoming.site &&
+        p.direction === r.direction,
     ) ||
     choices.find(
       (p) =>

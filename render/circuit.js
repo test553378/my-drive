@@ -20,6 +20,7 @@ export function buildGameCircuit(
         branchClearance(
           graph,
           trackPose(track, d, side * (track.halfWidth + 1.5)),
+          3,
         ) < 2,
       );
     return gaps.get(key);

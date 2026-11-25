@@ -7,6 +7,9 @@ for (const track of TRACKS)
   layouts[track.id] = searchServiceSites(track).map((s) => ({
     gate: s.gate,
     side: s.side,
+    hubDistance: s.hubDistance,
+    hubAdvance: s.hubAdvance,
+    anchorRun: s.anchorRun,
     access: s.paths.access.controls,
     exit: s.paths.exit.controls,
   }));

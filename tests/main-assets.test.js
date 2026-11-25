@@ -207,6 +207,34 @@ test("V8: all three flames share one fixed 3D view, roads face up, and mountain 
           ),
         terrain = mountainTerrain(track, points);
       for (const p of points) assert.ok(terrain.heightAt(p.x, p.z) < p.y - 0.2);
+      assert.ok(terrain.mesh.geometry.getAttribute("position").count < 21000);
+      const bounds = new THREE.Box3().setFromObject(terrain.mesh);
+      for (const p of points)
+        assert.ok(
+          p.x > bounds.min.x &&
+            p.x < bounds.max.x &&
+            p.z > bounds.min.z &&
+            p.z < bounds.max.z,
+        );
+      const roads = Object.values(c.graph.edges).flatMap((edge) => {
+        const n = Math.ceil(edge.length / 4);
+        return Array.from({ length: n + 1 }, (_, i) => ({
+          ...edgePose(edge, (edge.length * i) / n),
+          width: edge.width,
+        }));
+      });
+      c.missions.root.updateMatrixWorld(true);
+      c.missions.root.traverse((o) => {
+        if (o.name !== "Service support") return;
+        const column = new THREE.Box3().setFromObject(o),
+          center = column.getCenter(new THREE.Vector3());
+        for (const p of roads)
+          if (p.y < column.max.y - 3 && p.y > column.min.y)
+            assert.ok(
+              Math.hypot(p.x - center.x, p.z - center.z) > p.width + 1,
+              "bridge support leaves lower roadway clear",
+            );
+      });
       release(terrain.mesh);
     }
     release(c.root);

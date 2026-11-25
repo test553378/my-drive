@@ -2,111 +2,138 @@
 export const SERVICE_LAYOUTS = {
   C01: [
     {
+      anchorRun: 80,
       gate: 328.125,
       side: 1,
+      hubDistance: 140,
+      hubAdvance: 160,
       access: {
-        lead: 30,
-        tail: 15,
+        lead: 15,
+        tail: 30,
       },
       exit: {
         lead: 260,
-        tail: 50,
-      },
-    },
-    {
-      gate: 940.625,
-      side: 1,
-      access: {
-        lead: 30,
-        tail: 15,
-      },
-      exit: {
-        lead: 180,
         tail: 80,
       },
     },
     {
+      anchorRun: 80,
+      gate: 776.5625,
+      side: 1,
+      hubDistance: 140,
+      hubAdvance: 160,
+      access: {
+        lead: 15,
+        tail: 15,
+      },
+      exit: {
+        lead: 360,
+        tail: 50,
+      },
+    },
+    {
+      anchorRun: 80,
       gate: 1268.75,
       side: 1,
+      hubDistance: 140,
+      hubAdvance: 160,
       access: {
         lead: 30,
         tail: 15,
       },
       exit: {
-        lead: 260,
+        lead: 360,
         tail: 80,
       },
     },
   ],
   C02: [
     {
-      gate: 399.609375,
+      anchorRun: 125,
+      gate: 438.28125,
       side: -1,
+      hubDistance: 140,
+      hubAdvance: 160,
       access: {
-        lead: 30,
+        lead: 15,
         tail: 15,
       },
       exit: {
-        lead: 260,
-        tail: 80,
+        lead: 480,
+        tail: 180,
       },
     },
     {
-      gate: 670.3125,
+      anchorRun: 125,
+      gate: 837.890625,
       side: -1,
+      hubDistance: 440,
+      hubAdvance: 160,
       access: {
         lead: 30,
         tail: 15,
       },
       exit: {
-        lead: 260,
-        tail: 80,
+        lead: 180,
+        tail: 260,
       },
     },
     {
-      gate: 1134.375,
+      anchorRun: 125,
+      gate: 1469.53125,
       side: -1,
+      hubDistance: 140,
+      hubAdvance: 40,
       access: {
-        lead: 30,
-        tail: 15,
-      },
-      exit: {
-        lead: 50,
+        lead: 15,
         tail: 50,
+      },
+      exit: {
+        lead: 480,
+        tail: 120,
       },
     },
   ],
   C03: [
     {
-      gate: 539.0625,
+      anchorRun: 80,
+      gate: 292.96875,
       side: -1,
+      hubDistance: 200,
+      hubAdvance: 160,
       access: {
         lead: 30,
-        tail: 15,
-      },
-      exit: {
-        lead: 120,
         tail: 80,
       },
-    },
-    {
-      gate: 1066.40625,
-      side: -1,
-      access: {
-        lead: 30,
-        tail: 15,
-      },
       exit: {
-        lead: 260,
+        lead: 480,
         tail: 120,
       },
     },
     {
-      gate: 1417.96875,
+      anchorRun: 80,
+      gate: 773.4375,
       side: -1,
+      hubDistance: 200,
+      hubAdvance: 160,
       access: {
         lead: 30,
         tail: 15,
+      },
+      exit: {
+        lead: 15,
+        tail: 15,
+      },
+    },
+    {
+      anchorRun: 80,
+      gate: 1312.5,
+      side: -1,
+      hubDistance: 200,
+      hubAdvance: 160,
+      access: {
+        lead: 30,
+        tail: 180,
       },
       exit: {
         lead: 260,
@@ -116,39 +143,48 @@ export const SERVICE_LAYOUTS = {
   ],
   C04: [
     {
-      gate: 433.59375,
+      anchorRun: 80,
+      gate: 375.78125,
       side: -1,
+      hubDistance: 140,
+      hubAdvance: 160,
       access: {
         lead: 30,
-        tail: 15,
+        tail: 30,
       },
       exit: {
-        lead: 260,
-        tail: 120,
-      },
-    },
-    {
-      gate: 737.109375,
-      side: -1,
-      access: {
-        lead: 30,
-        tail: 15,
-      },
-      exit: {
-        lead: 260,
-        tail: 120,
-      },
-    },
-    {
-      gate: 1401.953125,
-      side: -1,
-      access: {
-        lead: 30,
-        tail: 15,
-      },
-      exit: {
-        lead: 260,
+        lead: 180,
         tail: 80,
+      },
+    },
+    {
+      anchorRun: 80,
+      gate: 766.015625,
+      side: -1,
+      hubDistance: 200,
+      hubAdvance: 160,
+      access: {
+        lead: 30,
+        tail: 80,
+      },
+      exit: {
+        lead: 480,
+        tail: 120,
+      },
+    },
+    {
+      anchorRun: 80,
+      gate: 1604.296875,
+      side: -1,
+      hubDistance: 200,
+      hubAdvance: 160,
+      access: {
+        lead: 15,
+        tail: 15,
+      },
+      exit: {
+        lead: 480,
+        tail: 180,
       },
     },
   ],

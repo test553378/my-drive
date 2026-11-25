@@ -6,7 +6,7 @@ const Y = new THREE.Vector3(0, 1, 0);
 const lerp = (a, b, t) =>
   new THREE.Vector3(a.x, a.y, a.z).lerp(new THREE.Vector3(b.x, b.y, b.z), t);
 const corridorCache = new WeakMap();
-export function branchClearance(graph, p) {
+export function branchClearance(graph, p, verticalClearance = Infinity) {
   if (!corridorCache.has(graph))
     corridorCache.set(
       graph,
@@ -22,7 +22,11 @@ export function branchClearance(graph, p) {
     );
   let best = Infinity;
   for (const q of corridorCache.get(graph))
-    best = Math.min(best, Math.hypot(p.x - q.x, p.z - q.z) - q.width);
+    if (
+      verticalClearance === Infinity ||
+      Math.abs(p.y - q.y) < verticalClearance
+    )
+      best = Math.min(best, Math.hypot(p.x - q.x, p.z - q.z) - q.width);
   return best;
 }
 export function buildMissionWorld(textures, graph) {
@@ -50,6 +54,50 @@ export function buildMissionWorld(textures, graph) {
     normalScale: new THREE.Vector2(0.3, 0.3),
     roughness: 1,
   });
+  asphalt.userData.roadAsphalt = true;
+  // Tangential roads share a short paved junction at the ring. Give their
+  // identical-height asphalt a stable depth order and omit internal markings.
+  const roadMaterials = new Map(
+    ["access", "loop", "exit"].map((role, i) => {
+      const material = asphalt.clone();
+      material.polygonOffset = true;
+      material.polygonOffsetUnits = -2 * (i + 1);
+      return [role, material];
+    }),
+  );
+  const junctions = new Map(graph.sites.map((site) => [site.index, []]));
+  for (const edge of Object.values(graph.edges).filter((e) => !e.main)) {
+    const hub = graph.nodes["hub-" + edge.site],
+      count = Math.ceil(edge.length / 3);
+    for (let i = 0; i <= count; i++) {
+      const d = (edge.length * i) / count,
+        p = edgePose(edge, d);
+      if (Math.hypot(p.x - hub.x, p.z - hub.z) < 70)
+        junctions
+          .get(edge.site)
+          .push({ ...p, edge: edge.id, width: edgeWidth(edge, d) });
+    }
+  }
+  const occupied =
+    graph.courseId === "C02"
+      ? Object.values(graph.edges).flatMap((edge) => {
+          const count = Math.ceil(edge.length / 3);
+          return Array.from({ length: count + 1 }, (_, i) => ({
+            ...edgePose(edge, (edge.length * i) / count),
+            width: edgeWidth(edge, (edge.length * i) / count),
+          }));
+        })
+      : [];
+  const supportClear = (p) =>
+    !occupied.some(
+      (q) => q.y < p.y - 3 && Math.hypot(p.x - q.x, p.z - q.z) < q.width + 2,
+    );
+  const localSupportClear = (group, x, z) =>
+    supportClear(
+      new THREE.Vector3(x, 0, z)
+        .applyAxisAngle(Y, group.rotation.y)
+        .add(group.position),
+    );
   const boxGeo = new RoundedBoxGeometry(1, 1, 1, 2, 0.06),
     sphere = new THREE.SphereGeometry(1, 12, 8),
     cylinder = new THREE.CylinderGeometry(1, 1, 1, 10);
@@ -74,8 +122,13 @@ export function buildMissionWorld(textures, graph) {
           raw = typeof off === "function" ? off(w) : off;
         let o = raw;
         const center = edgePose(edge, d);
-        if (material === asphalt && Number.isFinite(center.mainStation)) {
-          const q = trackPose(graph.track, center.mainStation),
+        const station = center.mainStation ?? center.contactStation;
+        if (
+          material.userData.roadAsphalt &&
+          Number.isFinite(station) &&
+          Math.abs(center.y - trackPose(graph.track, station).y) < 0.08
+        ) {
+          const q = trackPose(graph.track, station),
             normalOffset = -(center.x - q.x) * q.tz + (center.z - q.z) * q.tx,
             alignment = Math.max(0.5, center.tx * q.tx + center.tz * q.tz),
             side = graph.sites.find((s) => s.index === edge.site).side;
@@ -104,8 +157,9 @@ export function buildMissionWorld(textures, graph) {
     for (let i = 0; i < count; i++) {
       const d = (edge.length * (i + 0.5)) / count,
         p = edgePose(edge, d);
-      if (Number.isFinite(p.mainStation)) {
-        const q = trackPose(graph.track, p.mainStation);
+      const station = p.mainStation ?? p.contactStation;
+      if (Number.isFinite(station)) {
+        const q = trackPose(graph.track, station);
         if (marking) {
           const off =
               typeof left === "function" ? left(edgeWidth(edge, d)) : left,
@@ -113,6 +167,22 @@ export function buildMissionWorld(textures, graph) {
           if (Math.hypot(v.x - q.x, v.z - q.z) < graph.track.halfWidth + 0.2)
             continue;
         }
+      }
+      if (marking) {
+        const off =
+            typeof left === "function" ? left(edgeWidth(edge, d)) : left,
+          v = edgePose(edge, d, off);
+        if (
+          junctions
+            .get(edge.site)
+            .some(
+              (q) =>
+                q.edge !== edge.id &&
+                Math.abs(q.y - v.y) < 0.1 &&
+                Math.hypot(q.x - v.x, q.z - v.z) < q.width + 0.3,
+            )
+        )
+          continue;
       }
       const n = i * 2;
       ix.push(n, n + 1, n + 2, n + 1, n + 3, n + 2);
@@ -151,7 +221,7 @@ export function buildMissionWorld(textures, graph) {
         (w) => -w,
         (w) => w,
         0.003,
-        asphalt,
+        roadMaterials.get(e.id.split("-")[0]),
       );
       for (const sign of [-1, 1])
         ribbon(
@@ -166,7 +236,9 @@ export function buildMissionWorld(textures, graph) {
       if (graph.courseId === "C02")
         for (let d = 12; d < e.length; d += 24) {
           const p = edgePose(e, d);
-          box(root, p.x, (p.y - 4) / 2, p.z, 0.8, p.y + 4, 0.8, stone);
+          if (supportClear(p))
+            box(root, p.x, (p.y - 4) / 2, p.z, 0.8, p.y + 4, 0.8, stone).name =
+              "Service support";
         }
     }
   const sites = [];
@@ -184,7 +256,9 @@ export function buildMissionWorld(textures, graph) {
     if (graph.courseId === "C02")
       for (const x of [-11, 11])
         for (const z of [-8, 8])
-          box(g, x, -(p.y + 4) / 2, z, 0.8, p.y + 4, 0.8, stone);
+          if (localSupportClear(g, x, z))
+            box(g, x, -(p.y + 4) / 2, z, 0.8, p.y + 4, 0.8, stone).name =
+              "Service support";
     box(g, 0, 3.8, 0, 13, 7.6, 10, white);
     box(g, 0, 7.8, 0, 13.8, 0.35, 10.8, dark);
     box(g, 0, 1.6, -5.08, 2.1, 3.2, 0.12, blue);
@@ -246,7 +320,9 @@ export function buildMissionWorld(textures, graph) {
     if (graph.courseId === "C02")
       for (const x of [-13, 13])
         for (const z of [-8, 8])
-          box(g, x, -(p.y + 4) / 2, z, 0.8, p.y + 4, 0.8, stone);
+          if (localSupportClear(g, x, z))
+            box(g, x, -(p.y + 4) / 2, z, 0.8, p.y + 4, 0.8, stone).name =
+              "Service support";
     box(g, 0, 4, 0, 18, 8, 12, white);
     box(g, 0, 8.2, 0, 18.8, 0.5, 12.8, color);
     box(g, 0, 1.8, -6.1, 3.6, 3.6, 0.15, glass);
