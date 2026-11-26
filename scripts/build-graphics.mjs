@@ -46,7 +46,7 @@ files["concept-rival.glb"] = {
   sha256: createHash("sha256").update(rival).digest("hex"),
 };
 const game = {
-  version: "8.0.3",
+  version: "8.0.4",
   engine: manifest.engine,
   files,
   bundle: {

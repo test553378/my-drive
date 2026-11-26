@@ -1,14 +1,20 @@
 import * as THREE from "three";
 export function mountainTerrain(track, extraRoads = []) {
   const pad = 140,
-    x0 = track.bounds.minX - pad,
-    z0 = track.bounds.minZ - pad,
-    width = track.bounds.maxX - track.bounds.minX + pad * 2,
-    depth = track.bounds.maxZ - track.bounds.minZ + pad * 2,
-    nx = Math.ceil(width / 8),
-    nz = Math.ceil(depth / 8),
+    x0 = Math.min(track.bounds.minX, ...extraRoads.map((p) => p.x)) - pad,
+    z0 = Math.min(track.bounds.minZ, ...extraRoads.map((p) => p.z)) - pad,
+    width =
+      Math.max(track.bounds.maxX, ...extraRoads.map((p) => p.x)) - x0 + pad,
+    depth =
+      Math.max(track.bounds.maxZ, ...extraRoads.map((p) => p.z)) - z0 + pad,
+    // Include distant service roads without growing the iPad terrain budget
+    // with the square of their distance from the main circuit.
+    cell = Math.max(8, Math.sqrt((width * depth) / 20000)),
+    nx = Math.ceil(width / cell),
+    nz = Math.ceil(depth / cell),
     dx = width / nx,
     dz = depth / nz,
+    ceilingRadiusSquared = (Math.hypot(dx, dz) + 12) ** 2,
     points = [...track.table.filter((_, i) => i % 3 === 0), ...extraRoads],
     heights = new Float32Array((nx + 1) * (nz + 1)),
     positions = [],
@@ -19,9 +25,13 @@ export function mountainTerrain(track, extraRoads = []) {
       const x = x0 + ix * dx,
         z = z0 + iz * dz;
       let nearest = points[0],
-        distance = Infinity;
+        distance = Infinity,
+        ceiling = Infinity;
       for (const p of points) {
         const d = (p.x - x) ** 2 + (p.z - z) ** 2;
+        // At a grade-separated crossing the nearest road can be the upper
+        // deck. Keep the entire terrain cell below the lower deck as well.
+        if (d < ceilingRadiusSquared) ceiling = Math.min(ceiling, p.y - 3.6);
         if (d < distance) {
           distance = d;
           nearest = p;
@@ -36,7 +46,7 @@ export function mountainTerrain(track, extraRoads = []) {
           3.6 -
           distance * 0.045 +
           Math.max(0, distance - 25) * 0.1 * (0.5 + 0.5 * noise),
-        y = -4 + (hill + 4) * fade;
+        y = Math.min(-4 + (hill + 4) * fade, ceiling);
       heights[iz * (nx + 1) + ix] = y;
       positions.push(x, y, z);
       const color = new THREE.Color(0x626e52).multiplyScalar(

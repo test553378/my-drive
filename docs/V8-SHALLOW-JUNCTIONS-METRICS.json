@@ -1,0 +1,298 @@
+[
+  {
+    "course": "C01",
+    "sites": [
+      {
+        "site": 0,
+        "gate": 328.125,
+        "entry": {
+          "maximumAngleDegrees": 13.721,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 21.52,
+          "taperArcMetres": 111,
+          "totalArcMetres": 319.99
+        },
+        "return": {
+          "maximumAngleDegrees": 13.746,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 20.31,
+          "taperArcMetres": 107.17,
+          "totalArcMetres": 944.52
+        },
+        "entryNodeAngleDegrees": 0.003,
+        "mergeNodeAngleDegrees": 0.003,
+        "loopExitAngleDegrees": 0.006
+      },
+      {
+        "site": 1,
+        "gate": 776.5625,
+        "entry": {
+          "maximumAngleDegrees": 13.745,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 21.27,
+          "taperArcMetres": 108.28,
+          "totalArcMetres": 309.57
+        },
+        "return": {
+          "maximumAngleDegrees": 13.713,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 21.25,
+          "taperArcMetres": 111.6,
+          "totalArcMetres": 1006.06
+        },
+        "entryNodeAngleDegrees": 0.003,
+        "mergeNodeAngleDegrees": 0.373,
+        "loopExitAngleDegrees": 0.006
+      },
+      {
+        "site": 2,
+        "gate": 1268.75,
+        "entry": {
+          "maximumAngleDegrees": 13.403,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 22.47,
+          "taperArcMetres": 114.09,
+          "totalArcMetres": 336.68
+        },
+        "return": {
+          "maximumAngleDegrees": 13.711,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 20.85,
+          "taperArcMetres": 108.65,
+          "totalArcMetres": 1093.56
+        },
+        "entryNodeAngleDegrees": 0.068,
+        "mergeNodeAngleDegrees": 0.003,
+        "loopExitAngleDegrees": 0.006
+      }
+    ]
+  },
+  {
+    "course": "C02",
+    "sites": [
+      {
+        "site": 0,
+        "gate": 438.28125,
+        "entry": {
+          "maximumAngleDegrees": 11.645,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 20.96,
+          "taperArcMetres": 108.98,
+          "totalArcMetres": 341.94
+        },
+        "return": {
+          "maximumAngleDegrees": 11.69,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 21.5,
+          "taperArcMetres": 112.5,
+          "totalArcMetres": 1385.18
+        },
+        "entryNodeAngleDegrees": 0.002,
+        "mergeNodeAngleDegrees": 0.548,
+        "loopExitAngleDegrees": 0.006
+      },
+      {
+        "site": 1,
+        "gate": 837.890625,
+        "entry": {
+          "maximumAngleDegrees": 11.208,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 21.74,
+          "taperArcMetres": 114.32,
+          "totalArcMetres": 605.57
+        },
+        "return": {
+          "maximumAngleDegrees": 11.661,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 21.82,
+          "taperArcMetres": 108.53,
+          "totalArcMetres": 1314
+        },
+        "entryNodeAngleDegrees": 0.171,
+        "mergeNodeAngleDegrees": 0.418,
+        "loopExitAngleDegrees": 0.006
+      },
+      {
+        "site": 2,
+        "gate": 1469.53125,
+        "entry": {
+          "maximumAngleDegrees": 10.725,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 23.37,
+          "taperArcMetres": 118.25,
+          "totalArcMetres": 290.32
+        },
+        "return": {
+          "maximumAngleDegrees": 11.893,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 19.21,
+          "taperArcMetres": 103.24,
+          "totalArcMetres": 1450.76
+        },
+        "entryNodeAngleDegrees": 0.215,
+        "mergeNodeAngleDegrees": 0.002,
+        "loopExitAngleDegrees": 0.006
+      }
+    ]
+  },
+  {
+    "course": "C03",
+    "sites": [
+      {
+        "site": 0,
+        "gate": 292.96875,
+        "entry": {
+          "maximumAngleDegrees": 12.179,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 23.09,
+          "taperArcMetres": 116.83,
+          "totalArcMetres": 430.85
+        },
+        "return": {
+          "maximumAngleDegrees": 12.582,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 20.13,
+          "taperArcMetres": 107.19,
+          "totalArcMetres": 1374.02
+        },
+        "entryNodeAngleDegrees": 0.002,
+        "mergeNodeAngleDegrees": 0.29,
+        "loopExitAngleDegrees": 0.006
+      },
+      {
+        "site": 1,
+        "gate": 773.4375,
+        "entry": {
+          "maximumAngleDegrees": 14.677,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 20.8,
+          "taperArcMetres": 101.56,
+          "totalArcMetres": 356.35
+        },
+        "return": {
+          "maximumAngleDegrees": 12.847,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 24.12,
+          "taperArcMetres": 118.03,
+          "totalArcMetres": 384.36
+        },
+        "entryNodeAngleDegrees": 0.075,
+        "mergeNodeAngleDegrees": 0.223,
+        "loopExitAngleDegrees": 0.006
+      },
+      {
+        "site": 2,
+        "gate": 1312.5,
+        "entry": {
+          "maximumAngleDegrees": 12.425,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 36.21,
+          "taperArcMetres": 115.99,
+          "totalArcMetres": 545.24
+        },
+        "return": {
+          "maximumAngleDegrees": 12.564,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 20.58,
+          "taperArcMetres": 107.18,
+          "totalArcMetres": 976.67
+        },
+        "entryNodeAngleDegrees": 0.002,
+        "mergeNodeAngleDegrees": 0.002,
+        "loopExitAngleDegrees": 0.006
+      }
+    ]
+  },
+  {
+    "course": "C04",
+    "sites": [
+      {
+        "site": 0,
+        "gate": 375.78125,
+        "entry": {
+          "maximumAngleDegrees": 12.087,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 24.43,
+          "taperArcMetres": 112.4,
+          "totalArcMetres": 352.22
+        },
+        "return": {
+          "maximumAngleDegrees": 12.094,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 20.08,
+          "taperArcMetres": 106.25,
+          "totalArcMetres": 833.74
+        },
+        "entryNodeAngleDegrees": 0.002,
+        "mergeNodeAngleDegrees": 0.078,
+        "loopExitAngleDegrees": 0.006
+      },
+      {
+        "site": 1,
+        "gate": 766.015625,
+        "entry": {
+          "maximumAngleDegrees": 11.74,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 21.72,
+          "taperArcMetres": 118.15,
+          "totalArcMetres": 432.2
+        },
+        "return": {
+          "maximumAngleDegrees": 12.007,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 20.76,
+          "taperArcMetres": 108.28,
+          "totalArcMetres": 1372.64
+        },
+        "entryNodeAngleDegrees": 0.002,
+        "mergeNodeAngleDegrees": 0.303,
+        "loopExitAngleDegrees": 0.006
+      },
+      {
+        "site": 2,
+        "gate": 1604.296875,
+        "entry": {
+          "maximumAngleDegrees": 12.002,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 17.47,
+          "taperArcMetres": 106.28,
+          "totalArcMetres": 348.29
+        },
+        "return": {
+          "maximumAngleDegrees": 12.032,
+          "transitionStationMetres": 105,
+          "parallelStationMetres": 20,
+          "parallelArcMetres": 22.04,
+          "taperArcMetres": 109.58,
+          "totalArcMetres": 1424.7
+        },
+        "entryNodeAngleDegrees": 0.772,
+        "mergeNodeAngleDegrees": 0.023,
+        "loopExitAngleDegrees": 0.006
+      }
+    ]
+  }
+]
